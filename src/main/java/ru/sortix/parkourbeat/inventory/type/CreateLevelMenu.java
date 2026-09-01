@@ -1,3 +1,4 @@
+// ФАЙЛ: src/main/java/ru/sortix/parkourbeat/inventory/type/CreateLevelMenu.java
 package ru.sortix.parkourbeat.inventory.type;
 
 import lombok.NonNull;
@@ -17,19 +18,30 @@ import ru.sortix.parkourbeat.inventory.ParkourBeatInventory;
 import ru.sortix.parkourbeat.item.ItemUtils;
 import ru.sortix.parkourbeat.levels.LevelsManager;
 import ru.sortix.parkourbeat.player.input.PlayersInputManager;
+import ru.sortix.parkourbeat.utils.lang.Lang;
 import ru.sortix.parkourbeat.utils.lang.LangOptions;
 import ru.sortix.parkourbeat.utils.lang.LangOptions.Placeholders;
 
 import java.time.Duration;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import ru.sortix.parkourbeat.utils.text.PbText;
+
 public class CreateLevelMenu extends ParkourBeatInventory {
     public static final boolean DISPLAY_NON_DEFAULT_WORLD_TYPES = true;
     private final String levelName;
 
+    /** Ширина уровня в чанках: 1 или 4. */
+    private int chunkWidth = 1;
+
+    /** Режим уровня. По умолчанию обычный 3D — как было всегда. */
+    private ru.sortix.parkourbeat.twod.LevelMode levelMode =
+        ru.sortix.parkourbeat.twod.LevelMode.THREE_D;
+
     public CreateLevelMenu(@NonNull ParkourBeat plugin, String lang, @NonNull String levelName) {
         super(plugin, 3, lang, LangOptions.inventory_createlevel_title.getComponent(lang));
         this.levelName = levelName;
+        this.renderTypeItems();
 
         if (DISPLAY_NON_DEFAULT_WORLD_TYPES) {
             this.setItem(
@@ -65,6 +77,17 @@ public class CreateLevelMenu extends ParkourBeatInventory {
             return;
         }
 
+        ru.sortix.parkourbeat.rating.StatisticsManager statistics =
+            plugin.get(ru.sortix.parkourbeat.rating.StatisticsManager.class);
+        if (statistics.getDisplayRank(player.getUniqueId()) <= 0) {
+            player.closeInventory();
+            for (net.kyori.adventure.text.Component line
+                : Lang.lore(player, "inventory.createlevel.locked")) {
+                player.sendMessage(line);
+            }
+            return;
+        }
+
         PlayersInputManager manager = plugin.get(PlayersInputManager.class);
         if (manager.isInputRequested(player)) {
             player.sendMessage(LangOptions.inventory_editorprivacy_rename_unavilable.getComponent(lang));
@@ -91,6 +114,37 @@ public class CreateLevelMenu extends ParkourBeatInventory {
         });
     }
 
+    /**
+     * Переключатель размера площадки. Это редкий вариант, поэтому по умолчанию выключен:
+     * обычный уровень создаётся ровно так же, как и раньше.
+     */
+    private void renderTypeItems() {
+        boolean twoD = this.levelMode.isTwoD();
+        this.setItem(1, 3, ItemUtils.create(
+            twoD ? Material.WHITE_STAINED_GLASS : Material.GRASS_BLOCK, meta -> {
+                meta.displayName(Lang.item(this.lang, twoD
+                    ? "inventory.createlevel.mode.name_2d"
+                    : "inventory.createlevel.mode.name_3d"));
+                meta.lore(Lang.lore(this.lang, twoD
+                    ? "inventory.createlevel.mode.lore_2d"
+                    : "inventory.createlevel.mode.lore_3d"));
+            }), event -> {
+            this.levelMode = this.levelMode.toggle();
+            this.renderTypeItems();
+        });
+
+        this.setItem(1, 7, ItemUtils.create(
+            this.chunkWidth >= 4 ? Material.QUARTZ_BLOCK : Material.STONE_BRICKS, meta -> {
+                meta.displayName(Lang.item(this.lang, "inventory.createlevel.size.name"));
+                meta.lore(Lang.lore(this.lang, this.chunkWidth >= 4
+                    ? "inventory.createlevel.size.lore_wide"
+                    : "inventory.createlevel.size.lore_narrow"));
+            }), event -> {
+            this.chunkWidth = this.chunkWidth >= 4 ? 1 : 4;
+            this.renderTypeItems();
+        });
+    }
+
     private void createLevel(@NonNull Player owner, @NonNull World.Environment environment) {
         owner.closeInventory();
 
@@ -101,7 +155,7 @@ public class CreateLevelMenu extends ParkourBeatInventory {
             default -> "Unknown";
         };
 
-        Component titleText = LegacyComponentSerializer.legacyAmpersand().deserialize(this.levelName);
+        Component titleText = PbText.vanilla(this.levelName);
 
         AtomicInteger progress = new AtomicInteger(1);
         BukkitTask progressTask = this.plugin.getServer().getScheduler().runTaskTimerAsynchronously(this.plugin, () -> {
@@ -120,7 +174,8 @@ public class CreateLevelMenu extends ParkourBeatInventory {
 
         this.plugin
             .get(LevelsManager.class)
-            .createLevel(environment, owner.getUniqueId(), owner.getName(), this.levelName)
+            .createLevel(environment, owner.getUniqueId(), owner.getName(), this.levelName,
+                this.chunkWidth, this.levelMode)
             .thenAccept(level -> {
                 progressTask.cancel();
 
@@ -132,12 +187,16 @@ public class CreateLevelMenu extends ParkourBeatInventory {
 
                 EditActivity.createAsync(this.plugin, owner, level).thenAccept(editActivity -> {
                     if (editActivity == null) {
-                        LangOptions.inventory_createlevel_create_edit_unavilable.sendMsg(owner, new Placeholders("%level%", ((TextComponent)level.getDisplayName()).content()));
+                        LangOptions.inventory_createlevel_create_edit_unavilable.sendMsg(owner, new Placeholders("%level%", PbText.keepColors(
+                            net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer
+                                .legacyAmpersand().serialize(level.getDisplayName()))));
                         return;
                     }
                     this.plugin.get(ActivityManager.class).switchActivity(owner, editActivity, level.getSpawn()).thenAccept(success -> {
                         if (!success) {
-                            LangOptions.inventory_createlevel_create_edit_fail.sendMsg(owner, new Placeholders("%level%", ((TextComponent)level.getDisplayName()).content()));
+                            LangOptions.inventory_createlevel_create_edit_fail.sendMsg(owner, new Placeholders("%level%", PbText.keepColors(
+                            net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer
+                                .legacyAmpersand().serialize(level.getDisplayName()))));
                         }
                     });
                 });
