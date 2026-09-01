@@ -29,6 +29,7 @@ import ru.sortix.parkourbeat.activity.UserActivity;
 import ru.sortix.parkourbeat.activity.type.EditActivity;
 import ru.sortix.parkourbeat.activity.type.PlayActivity;
 import ru.sortix.parkourbeat.game.movement.GameMoveHandler;
+import ru.sortix.parkourbeat.game.movement.MovementAccuracyChecker;
 import ru.sortix.parkourbeat.levels.Level;
 import ru.sortix.parkourbeat.levels.LevelDifficulty;
 import ru.sortix.parkourbeat.levels.LevelsManager;
@@ -38,6 +39,7 @@ import ru.sortix.parkourbeat.levels.settings.CompletionParticle;
 import ru.sortix.parkourbeat.levels.settings.LevelBossBarColor;
 import ru.sortix.parkourbeat.levels.settings.LevelSettings;
 import ru.sortix.parkourbeat.player.music.MusicTrack;
+import ru.sortix.parkourbeat.player.music.platform.MusicPackDispatcher;
 import ru.sortix.parkourbeat.player.music.MusicTracksManager;
 import ru.sortix.parkourbeat.player.music.platform.MusicPlatform;
 import ru.sortix.parkourbeat.rating.AccuracyGrade;
@@ -50,6 +52,8 @@ import ru.sortix.parkourbeat.stats.RunResult;
 import ru.sortix.parkourbeat.stats.RunSubmission;
 import ru.sortix.parkourbeat.levels.settings.GameSettings;
 import ru.sortix.parkourbeat.utils.TimeUtils;
+import ru.sortix.parkourbeat.utils.lang.Lang;
+import ru.sortix.parkourbeat.utils.lang.PlayerLang;
 import ru.sortix.parkourbeat.utils.lang.LangOptions;
 import ru.sortix.parkourbeat.utils.lang.LangOptions.Placeholders;
 import ru.sortix.parkourbeat.world.AutoLookSettings;
@@ -64,6 +68,7 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 
+import ru.sortix.parkourbeat.utils.text.PbText;
 @Getter
 public class Game {
     public static final double BLOCKS_PER_SECOND = 5.6123;
@@ -81,8 +86,19 @@ public class Game {
      * добил — он и так знает, что включал, а сухое "Провален модификатор SD"
      * читается как ошибка плагина, а не как поражение.
      */
-    private static final Component LOSE_TITLE =
-        Component.text("Вы проиграли =(").color(NamedTextColor.RED);
+
+    /**
+     * Общий текст проигрыша. Игроку не сообщается, какой именно модификатор его
+     * добил — он и так знает, что включал, а сухое "Провален модификатор SD"
+     * читается как ошибка плагина, а не как поражение.
+     * <p>
+     * Раньше это была статическая константа; теперь текст зависит от языка игрока,
+     * поэтому собирается на месте.
+     */
+    @NonNull
+    private Component loseTitle() {
+        return Lang.text(this.player, "game.title.lost");
+    }
 
     private static final Title.Times FINISH_REASON_TITLE_TIMES = Title.Times.of(Duration.ofMillis(500L), Duration.ofMillis(1500L), Duration.ofMillis(500L));
 
@@ -92,7 +108,7 @@ public class Game {
     private final @NonNull Player player;
     private final @NonNull Level level;
     private final @NonNull GameMoveHandler gameMoveHandler;
-    private final @NonNull MusicMode musicMode;
+    private @NonNull MusicMode musicMode;
     private final @NonNull RunTracker runTracker;
 
     @Getter
@@ -112,10 +128,48 @@ public class Game {
     private BossBar bossBar;
     private BossBar technicalBossBar;
     private LightShowRunner lightShowRunner;
+    private ru.sortix.parkourbeat.levels.wonder.WonderRunner wonderRunner;
+    private ru.sortix.parkourbeat.levels.lamps.LampRunner lampRunner;
+    private ru.sortix.parkourbeat.levels.PortalRunner portalRunner;
     private volatile LevelBossBarColor bossBarColorOverride = null;
     private volatile long songStartedAtMillis = 0L;
     private volatile long songStoppedAtMillis = 0L;
     private volatile int lastTrackPieceNumber = 0;
+
+    // ==================== ЧЕКПОИНТЫ ====================
+    /** Отсортированные по ходу уровня активные чекпоинты. Пустой список — их нет. */
+    private final @NonNull java.util.List<ru.sortix.parkourbeat.levels.settings.Checkpoint> checkpoints
+        = new java.util.ArrayList<>();
+    /** Отметка каждого чекпоинта на треке, мс от начала песни. */
+    private final @NonNull java.util.List<Integer> checkpointOffsets = new java.util.ArrayList<>();
+    /** Номер куска нарезки, который сейчас играет (1..N+1). 0 — ничего не играет. */
+    private volatile int currentSlice = 0;
+    /** Индекс последнего пройденного чекпоинта: -1 — игрок ещё до первого. */
+    private volatile int reachedCheckpoint = -1;
+    /** Сколько раз игрока откатывало на чекпоинт за этот забег. */
+    private volatile int checkpointRespawns = 0;
+    /**
+     * Пак с нарезкой не поехал в этой сессии. Чекпоинты выключены до смены уровня,
+     * но их список остаётся на месте: пересобирать его между забегами дешевле,
+     * чем терять навсегда.
+     */
+    private volatile boolean checkpointPackFailed = false;
+    /** Очки, комбо и попадания на момент взятия последнего чекпоинта. */
+    private RunTracker.Snapshot checkpointRunSnapshot = null;
+    /** Точность движения на тот же момент. */
+    private MovementAccuracyChecker.Snapshot checkpointAccuracySnapshot = null;
+    /** Задача, которая заводит следующий кусок нарезки ровно на стыке. */
+    private BukkitTask sliceTask;
+    /** Трек, которым реально играем: при чекпоинтах это нарезанный плейлист. */
+    private @Nullable MusicTrack playbackTrack = null;
+    /**
+     * До этого момента проигрыш не засчитывается вообще.
+     * <p>
+     * Без этого откат на чекпоинт зацикливался намертво: телепорт назад сам по себе
+     * выглядит как движение против направления уровня, и следующий же PlayerMoveEvent
+     * вызывал новый failLevel, тот — новый откат, и так до бесконечности.
+     */
+    private volatile long respawnGraceUntil = 0L;
 
     private Game(@NonNull ParkourBeat plugin, @NonNull Player player, @NonNull Level level, @NonNull ModifierSet modifiers) {
         this.levelsManager = plugin.get(LevelsManager.class);
@@ -126,12 +180,34 @@ public class Game {
         this.modifiers = modifiers.copy();
         this.runTracker = new RunTracker(this.modifiers);
         this.gameMoveHandler = new GameMoveHandler(this);
-        this.musicMode = level.getLevelSettings().getGameSettings().getMusicTrack() == null
-            ? MusicMode.DISABLED
-            : (level.getLevelSettings().getGameSettings().isUseTrackPieces()
-            ? MusicMode.PIECES
-            : MusicMode.FULL_TRACK);
+        this.reloadCheckpoints();
+        this.musicMode = this.resolveMusicMode();
         this.prepareGame(plugin);
+    }
+
+    /**
+     * Кеш проверки воды на один тик.
+     * <p>
+     * {@link #isInWater(Player)} перебирает до 27 блоков вокруг игрока. Раньше он звался
+     * пару раз за забег, а теперь ещё и на каждом PlayerMoveEvent (иммунитет к промахам
+     * под водой) — это десятки тысяч обращений к чанкам в секунду на полном сервере.
+     * В пределах одного тика вода измениться не может, поэтому результат переиспользуется.
+     */
+    private static final java.util.Map<java.util.UUID, long[]> IN_WATER_CACHE
+        = new java.util.concurrent.ConcurrentHashMap<>();
+
+    public static boolean isInWaterCached(@NonNull Player player) {
+        long tick = Bukkit.getCurrentTick();
+        long[] cached = IN_WATER_CACHE.get(player.getUniqueId());
+        if (cached != null && cached[0] == tick) return cached[1] != 0L;
+
+        boolean result = isInWater(player);
+        IN_WATER_CACHE.put(player.getUniqueId(), new long[]{tick, result ? 1L : 0L});
+        return result;
+    }
+
+    public static void clearWaterCache(@NonNull Player player) {
+        IN_WATER_CACHE.remove(player.getUniqueId());
     }
 
     public static boolean isInWater(@NonNull Player player) {
@@ -225,19 +301,116 @@ public class Game {
 
         this.setCurrentState(State.READY);
 
-        MusicTrack musicTrack = settings.getGameSettings().getMusicTrack();
-        if (musicTrack == null || !musicTrack.isStillAvailable()) return;
+        // При рабочих чекпоинтах выдаём отдельный плейлист с нарезкой, а не исходный трек:
+        // в нём лежат куски part1..partN+1, по одному на промежуток между чекпоинтами.
+        MusicTrack musicTrack = this.getPlaybackTrack();
+        if (musicTrack == null || !musicTrack.isStillAvailable()) {
+            // Пака не будет вообще, а значит некому снять текстуры прошлого уровня:
+            // делаем это сами, иначе игрок ходит по этому уровню в чужих текстурах.
+            this.dropForeignTextures();
+            return;
+        }
+
+        final boolean checkpointPack = this.musicMode == MusicMode.CHECKPOINTS;
+        if (checkpointPack) {
+            plugin.getLogger().info("Выдаём пак нарезки '" + musicTrack.getId()
+                + Lang.raw(PlayerLang.of(this.player), "auto.game.prepare_game.1") + this.player.getName());
+        }
 
         musicTrack.isResourcepackCurrentlySet(this.player, currentlySet -> {
-            if (Boolean.TRUE.equals(currentlySet)) return;
+            // Совпадения трека мало. Текстуры уровня вмерживаются в архив трека, поэтому
+            // два разных уровня на одном треке дают РАЗНЫЕ паки. Раньше проверялся только
+            // трек, и переход на уровень с тем же треком не выдавал пак вовсе -
+            // текстуры предыдущего уровня оставались на игроке.
+            if (Boolean.TRUE.equals(currentlySet) && this.hasCorrectTexturesLoaded()) return;
             plugin.getServer().getScheduler().runTask(plugin, () -> {
                 if (!this.player.isOnline()) return;
-                // Результат нужен только для консоли: игроку ничего не пишем
-                // и ничем не мешаем. Ошибки видно в логе через MusicPackDispatcher.
-                musicTrack.setResourcepackAsync(plugin, this.player, result -> {
+                // Игра создаётся ДО switchActivity, поэтому текущая активность игрока здесь
+                // ещё от прошлого уровня. Свой уровень называем явно.
+                musicTrack.setResourcepackAsync(plugin, this.player,
+                    this.getNeededTexturesLevelId(), result -> {
+                    if (!checkpointPack) return;
+                    // РЕЗУЛЬТАТ - ЭТО ENUM, А НЕ BOOLEAN.
+                    //
+                    // Раньше здесь стояла проверка на Boolean.TRUE, которая не совпадала
+                    // никогда. Из-за этого откат на цельный трек срабатывал при КАЖДОЙ
+                    // успешной выдаче пака: чекпоинты стирались, музыка переключалась
+                    // вторым паком посреди уровня и обрывалась.
+                    if (result == null || result.isOk()) return;
+                    // SUPERSEDED - пак просто перебит следующим запросом, это не сбой.
+                    if (result == MusicPackDispatcher.Result.SUPERSEDED) return;
+                    if (result == MusicPackDispatcher.Result.PLAYER_LEFT) return;
+                    // ПАК НАРЕЗКИ НЕ ЗАГРУЗИЛСЯ.
+                    //
+                    // Оставлять игрока совсем без музыки нельзя: это хуже, чем уровень
+                    // без чекпоинтов. Откатываемся на цельный трек — уровень играется
+                    // как обычно, просто смерть возвращает на старт.
+                    plugin.getServer().getScheduler().runTask(plugin,
+                        this::fallbackToFullTrack);
                 }, null);
             });
         });
+    }
+
+    /**
+     * Уровень, чьи текстуры должны быть на клиенте на этом уровне (null - никаких).
+     */
+    @javax.annotation.Nullable
+    private java.util.UUID getNeededTexturesLevelId() {
+        return this.level.getLevelSettings().getGameSettings().isCustomTextures()
+            ? this.level.getUniqueId()
+            : null;
+    }
+
+    private boolean hasCorrectTexturesLoaded() {
+        try {
+            java.util.UUID loaded = this.getPlugin()
+                .get(ru.sortix.parkourbeat.player.CustomTexturesManager.class)
+                .getLoadedTexturesLevel(this.player);
+            return java.util.Objects.equals(loaded, this.getNeededTexturesLevelId());
+        } catch (Exception e) {
+            return true;
+        }
+    }
+
+    private void dropForeignTextures() {
+        try {
+            this.getPlugin().get(ru.sortix.parkourbeat.player.CustomTexturesManager.class)
+                .dropForeignTextures(this.player, this.level.getUniqueId());
+        } catch (Exception e) {
+            this.getPlugin().getLogger().log(java.util.logging.Level.WARNING,
+                Lang.raw(PlayerLang.of(this.player), "auto.game.drop_foreign_textures.1") + this.player.getName(), e);
+        }
+    }
+
+    /**
+     * Пак с нарезкой не поехал — играем цельный трек, чтобы уровень не остался немым.
+     */
+    private void fallbackToFullTrack() {
+        if (this.musicMode != MusicMode.CHECKPOINTS) return;
+
+        this.getPlugin().getLogger().warning("Пак нарезки не загрузился, откатываемся"
+            + Lang.raw(PlayerLang.of(this.player), "auto.game.fallback_to_full_track.1") + this.player.getName()
+            + Lang.raw(PlayerLang.of(this.player), "auto.game.fallback_to_full_track.2") + this.level.getUniqueId() + ")");
+
+        // НЕ РАЗРУШАЕМ СОСТОЯНИЕ, А СТАВИМ ФЛАГ.
+        //
+        // Раньше здесь очищался список чекпоинтов, и это было навсегда: объект игры
+        // переиспользуется между забегами на одном уровне, поэтому после единственного
+        // отката чекпоинты и шансы умирали до самого выхода в другой мир.
+        this.checkpointPackFailed = true;
+        this.musicMode = MusicMode.FULL_TRACK;
+        this.playbackTrack = null;
+        this.stopSliceTask();
+        this.reachedCheckpoint = -1;
+
+        MusicTrack original = this.level.getLevelSettings().getGameSettings().getMusicTrack();
+        if (original == null || !this.player.isOnline()) return;
+
+        this.playbackTrack = original;
+        original.setResourcepackAsync(this.getPlugin(), this.player,
+            this.getNeededTexturesLevelId(), result -> {
+            }, null);
     }
 
     @NonNull
@@ -249,6 +422,8 @@ public class Game {
         if (this.currentState != State.READY) return;
 
         this.setCurrentState(State.RUNNING);
+        this.getPlugin().get(ru.sortix.parkourbeat.replay.ReplayManager.class)
+            .startRecording(this.player);
 
         if (!this.player.isSprinting() || this.player.isSneaking()) {
             if (!this.hasModifier(Modifier.PRACTICE) && !isInWater(this.player)) {
@@ -271,6 +446,9 @@ public class Game {
         } else if (this.musicMode == MusicMode.FULL_TRACK) {
             musicPlatform.disableRepeatMode(this.player);
             musicPlatform.startPlayingTrackFull(this.player);
+        } else if (this.musicMode == MusicMode.CHECKPOINTS) {
+            musicPlatform.disableRepeatMode(this.player);
+            this.playSliceFrom(1);
         }
         this.getPlugin().get(ru.sortix.parkourbeat.player.PlayersVisibilityManager.class)
             .hideOthersFor(this.player);
@@ -278,8 +456,19 @@ public class Game {
         this.songStartedAtMillis = System.currentTimeMillis();
         this.songStoppedAtMillis = 0L;
         this.runSubmitted = false;
+        this.reachedCheckpoint = -1;
+        this.checkpointRespawns = 0;
+        this.checkpointRunSnapshot = null;
+        this.checkpointAccuracySnapshot = null;
+        this.attemptsVisibleUntil = 0L;
 
-        if (this.hasModifier(Modifier.HIGH_RISK)) {
+        // Чекпоинты пересобираются на каждый забег: строитель мог их подвинуть,
+        // а главное — так шансы гарантированно возвращаются после проигранной попытки.
+        // Режим музыки при этом НЕ поднимаем обратно: пак игроку выдаётся один раз, на
+        // входе в уровень, и включать куски, которых в выданном паке нет, — это тишина.
+        this.reloadCheckpoints();
+
+        if (this.hasModifier(Modifier.HARD_ROCK)) {
             this.player.setHealth(1.0D);
         }
 
@@ -327,6 +516,8 @@ public class Game {
         this.lastGrade = AccuracyGrade.SS;
         this.lastBleedAtMillis = 0L;
         this.runSubmitted = false;
+        this.reachedCheckpoint = -1;
+        this.checkpointRespawns = 0;
     }
 
     /** Точка спавна уровня с довёрнутой камерой (если автовыравнивание включено). */
@@ -349,6 +540,445 @@ public class Game {
         this.player.teleport(aligned);
     }
 
+    // ==================== ЧЕКПОИНТЫ ====================
+
+    /**
+     * Перечитать чекпоинты уровня и их отметки на треке.
+     * <p>
+     * Позиция на уровне и время в песне — это одно и то же, пересчитанное через
+     * скорость бега, поэтому отметка чекпоинта берётся прямо из его координаты.
+     */
+    public void reloadCheckpoints() {
+        this.checkpoints.clear();
+        this.checkpointOffsets.clear();
+
+        java.util.List<ru.sortix.parkourbeat.levels.settings.Checkpoint> active
+            = new java.util.ArrayList<>();
+        for (ru.sortix.parkourbeat.levels.settings.Checkpoint checkpoint
+            : this.level.getLightShow().getCheckpoints()) {
+            if (checkpoint.isEnabled()) active.add(checkpoint);
+        }
+        if (active.isEmpty()) return;
+
+        active.sort(java.util.Comparator.comparingDouble(checkpoint ->
+            ru.sortix.parkourbeat.levels.LightShowPositions
+                .getSignedDistance(this.level, checkpoint.getPosition())));
+
+        for (ru.sortix.parkourbeat.levels.settings.Checkpoint checkpoint : active) {
+            this.checkpoints.add(checkpoint);
+            this.checkpointOffsets.add(ru.sortix.parkourbeat.levels.LightShowPositions
+                .toTimeMillis(this.level, checkpoint.getPosition()));
+        }
+    }
+
+    /**
+     * Отметки чекпоинтов на треке в миллисекундах — то, по чему прокси режет ogg.
+     */
+    @NonNull
+    public java.util.List<Integer> getCheckpointOffsets() {
+        return java.util.Collections.unmodifiableList(this.checkpointOffsets);
+    }
+
+    @NonNull
+    public java.util.List<ru.sortix.parkourbeat.levels.settings.Checkpoint> getCheckpoints() {
+        return java.util.Collections.unmodifiableList(this.checkpoints);
+    }
+
+    public int getCheckpointRespawns() {
+        return this.checkpointRespawns;
+    }
+
+    /**
+     * Сколько всего откатов даёт уровень.
+     */
+    public int getCheckpointAttempts() {
+        try {
+            return this.level.getLevelSettings().getGameSettings().getCheckpointAttempts();
+        } catch (Exception e) {
+            return GameSettings.DEFAULT_CHECKPOINT_ATTEMPTS;
+        }
+    }
+
+    private static final String[] SUPERSCRIPT_DIGITS =
+        {"\u2070", "\u00b9", "\u00b2", "\u00b3", "\u2074", "\u2075", "\u2076", "\u2077", "\u2078", "\u2079"};
+
+    private static String superscript(int value) {
+        if (value < 0) value = 0;
+        if (value < 10) return SUPERSCRIPT_DIGITS[value];
+        StringBuilder result = new StringBuilder();
+        for (char c : String.valueOf(value).toCharArray()) {
+            result.append(SUPERSCRIPT_DIGITS[c - '0']);
+        }
+        return result.toString();
+    }
+
+    /** Момент последнего показа счётчика попыток. */
+    private long lastAttemptsShownAt = 0L;
+    /** До этого момента счётчик попыток показывается, дальше актионбар свободен. */
+    private volatile long attemptsVisibleUntil = 0L;
+
+    /**
+     * Актионбар обновляется чаще, чем гаснет текст: иначе счётчик мигал бы посреди
+     * своего же окна показа.
+     */
+    private static final long ATTEMPTS_ACTIONBAR_PERIOD_MILLIS = 1000L;
+    /** Сколько счётчик висит после взятия чекпоинта. */
+    public static final long ATTEMPTS_SHOW_AFTER_CHECKPOINT_MILLIS = 5000L;
+    /** Сколько счётчик висит после отката. */
+    public static final long ATTEMPTS_SHOW_AFTER_FAIL_MILLIS = 3000L;
+
+    /**
+     * Показать счётчик попыток на заданное время.
+     */
+    private void showCheckpointAttempts(long durationMillis, long delayMillis) {
+        long now = System.currentTimeMillis();
+        this.attemptsVisibleUntil = now + delayMillis + durationMillis;
+        // Сдвигаем последний показ назад, чтобы счётчик появился сразу после задержки,
+        // а не ждал ещё целый период.
+        this.lastAttemptsShownAt = now + delayMillis - ATTEMPTS_ACTIONBAR_PERIOD_MILLIS;
+    }
+
+    /**
+     * Счётчик попыток в актионбаре. Постоянно не висит: появляется только после взятия
+     * чекпоинта и после отката, чтобы не мешать оценкам прыжков всё остальное время.
+     * Цвет темнеет по мере расхода попыток, чтобы игрок понимал остаток боковым зрением.
+     */
+    private void tickCheckpointAttempts() {
+        if (!this.hasWorkingCheckpoints()) return;
+        if (this.currentState != State.RUNNING) return;
+
+        long now = System.currentTimeMillis();
+        if (now >= this.attemptsVisibleUntil) return;
+        if (now - this.lastAttemptsShownAt < ATTEMPTS_ACTIONBAR_PERIOD_MILLIS) return;
+        this.lastAttemptsShownAt = now;
+
+        int total = this.getCheckpointAttempts();
+        int used = Math.min(this.checkpointRespawns, total);
+        int left = total - used;
+
+        String color;
+        if (left >= 3) color = "&a";
+        else if (left == 2) color = "&e";
+        else if (left == 1) color = "&6";
+        else color = "&c";
+
+        this.player.sendActionBar(PbText.of(
+            color + superscript(Math.min(used + 1, total)) + "/" + superscript(total)));
+    }
+
+    /**
+     * Чекпоинты работают только тогда, когда трек под них реально нарезан.
+     * Без нарезки музыка с чекпоинта не пойдёт, а молча ронять игрока в тишину — хуже,
+     * чем не включать чекпоинты вовсе.
+     */
+    /**
+     * Уровень В ПРИНЦИПЕ пригоден для чекпоинтов: они расставлены и трек под них нарезан.
+     * Про режим музыки здесь ничего не спрашивается — иначе получилась бы петля,
+     * ведь сам режим и выбирается по этому признаку.
+     */
+    private boolean hasCheckpointSlices() {
+        if (this.checkpointPackFailed) return false;
+        if (this.checkpoints.isEmpty()) return false;
+        GameSettings settings = this.level.getLevelSettings().getGameSettings();
+        if (settings.isUseTrackPieces()) return false;
+        return settings.hasUsableSlices(this.checkpoints.size());
+    }
+
+    /**
+     * Чекпоинты работают прямо сейчас. Дополнительно к пригодности уровня требуется,
+     * чтобы игроку реально был выдан пак нарезки: иначе откат уводил бы его в тишину.
+     */
+    public boolean hasWorkingCheckpoints() {
+        return this.musicMode == MusicMode.CHECKPOINTS && this.hasCheckpointSlices();
+    }
+
+    @NonNull
+    private MusicMode resolveMusicMode() {
+        GameSettings settings = this.level.getLevelSettings().getGameSettings();
+        if (settings.getMusicTrack() == null) return MusicMode.DISABLED;
+        // Посекундная синхронизация давно не поддерживается и с чекпоинтами не смешивается.
+        if (settings.isUseTrackPieces()) return MusicMode.PIECES;
+        if (this.hasCheckpointSlices()) return MusicMode.CHECKPOINTS;
+        return MusicMode.FULL_TRACK;
+    }
+
+    /**
+     * Трек, который надо выдать игроку ресурспаком. При рабочих чекпоинтах это отдельный
+     * плейлист с нарезкой, а не исходный трек: в нём лежат куски part1..partN+1.
+     */
+    @Nullable
+    public MusicTrack getPlaybackTrack() {
+        if (this.playbackTrack != null) return this.playbackTrack;
+
+        GameSettings settings = this.level.getLevelSettings().getGameSettings();
+        MusicTrack original = settings.getMusicTrack();
+        if (original == null) return null;
+
+        if (this.musicMode != MusicMode.CHECKPOINTS) {
+            this.playbackTrack = original;
+            return this.playbackTrack;
+        }
+
+        String slicedId = settings.getSlicedPlaylistId();
+        if (slicedId == null || slicedId.isEmpty()) {
+            this.playbackTrack = original;
+            return this.playbackTrack;
+        }
+
+        MusicPlatform platform = this.musicTracksManager.getPlatform();
+        MusicTrack sliced = platform.getTrackById(slicedId);
+        if (sliced == null) {
+            // Плейлиста может ещё не быть в кеше платформы — он появился только что,
+            // сразу после нарезки. Заглушка с тем же id полностью рабочая для выдачи пака.
+            sliced = new MusicTrack(platform, slicedId, original.getName(), false, true);
+        }
+        this.playbackTrack = sliced;
+        return this.playbackTrack;
+    }
+
+    /**
+     * Индекс чекпоинта, на который игрока откатит прямо сейчас. -1 — ни одного не прошёл.
+     */
+    public int getReachedCheckpoint() {
+        return this.reachedCheckpoint;
+    }
+
+    /**
+     * Идёт откат на чекпоинт: проигрыш и проверки направления временно отключены.
+     */
+    public boolean isRespawnGrace() {
+        return System.currentTimeMillis() < this.respawnGraceUntil;
+    }
+
+    /**
+     * Пересчитать пройденные чекпоинты по текущему положению игрока.
+     * Вызывается на каждом тике игры: отдельный триггер здесь не нужен, чекпоинт — это
+     * просто отметка на оси уровня.
+     */
+    private void updateReachedCheckpoint() {
+        if (this.checkpoints.isEmpty()) return;
+        if (this.currentState != State.RUNNING) return;
+
+        double passed = this.getPassedDistancePublic(false);
+        int reached = this.reachedCheckpoint;
+
+        while (reached + 1 < this.checkpoints.size()) {
+            double checkpointDistance = ru.sortix.parkourbeat.levels.LightShowPositions
+                .getSignedDistance(this.level, this.checkpoints.get(reached + 1).getPosition());
+            if (passed + 0.001D < checkpointDistance) break;
+            reached++;
+        }
+
+        if (reached == this.reachedCheckpoint) return;
+        this.reachedCheckpoint = reached;
+
+        if (!this.displayTimecode) {
+            this.player.playSound(this.player.getLocation(), Sound.BLOCK_NOTE_BLOCK_PLING, 0.7f, 1.8f);
+        }
+        // Только актионбар: титл перекрывал бы оценки прыжков.
+        // Снимаем состояние забега: при откате игрок вернётся именно к нему.
+        this.checkpointRunSnapshot = this.runTracker.snapshot();
+        try {
+            this.checkpointAccuracySnapshot = this.gameMoveHandler.getAccuracyChecker().snapshot();
+        } catch (Exception e) {
+            this.checkpointAccuracySnapshot = null;
+        }
+
+        this.player.sendActionBar(Lang.text(this.player, "game.checkpoint",
+            "%number%", String.valueOf(reached + 1)));
+        // Счётчик делит актионбар с этим сообщением, поэтому сперва даём ему повисеть,
+        // и только потом на пять секунд показываем оставшиеся попытки.
+        this.showCheckpointAttempts(ATTEMPTS_SHOW_AFTER_CHECKPOINT_MILLIS, 1200L);
+    }
+
+    /**
+     * Проигрыш на уровне с чекпоинтами: игрок не вылетает, а возвращается на последний
+     * пройденный чекпоинт, и музыка запускается ровно с этого же места.
+     *
+     * @return true, если откат выполнен и обычный проигрыш отменяется
+     */
+    private boolean tryRespawnAtCheckpoint(@Nullable Component reasonFirstLine,
+                                           @Nullable Component reasonSecondLine) {
+        if (this.currentState != State.RUNNING) return false;
+        if (!this.hasWorkingCheckpoints()) return false;
+        if (this.reachedCheckpoint < 0) return false;
+
+        // Попытки кончились — уровень честно проваливается, иначе игрок застрянет здесь
+        // навсегда и будет откатываться бесконечно.
+        if (this.checkpointRespawns >= this.getCheckpointAttempts()) return false;
+
+        // Модификаторы, у которых мгновенный проигрыш — это и есть весь смысл.
+        // Без этого исключения чекпоинты превращали SUDDEN DEATH и PERFECT в обычный
+        // забег с бесконечными попытками, но с повышенным множителем очков.
+        if (this.hasModifier(Modifier.PRACTICE)) return false;
+        if (this.hasModifier(Modifier.SUDDEN_DEATH)) return false;
+        if (this.hasModifier(Modifier.PERFECT)) return false;
+
+        int index = this.reachedCheckpoint;
+        ru.sortix.parkourbeat.levels.settings.Checkpoint checkpoint = this.checkpoints.get(index);
+        this.checkpointRespawns++;
+
+        // Грейс включается ДО телепорта, а не в колбэке: телепорт асинхронный, и между
+        // вызовом и его завершением успевает прилететь ещё несколько move-событий.
+        this.respawnGraceUntil = System.currentTimeMillis() + 1500L;
+
+        // Ни титла, ни сабтитла: просто тихо возвращаем на чекпоинт.
+        this.player.playEffect(EntityEffect.HURT);
+        this.player.playSound(this.player.getLocation(), Sound.ENTITY_WOLF_HURT, 1.0F, 1.0F);
+
+        this.stopSliceTask();
+        this.musicTracksManager.getPlatform().stopPlayingSlice(this.player, this.currentSlice);
+
+        Location target = checkpoint.toLocation(this.level.getWorld());
+        target = LocationUtils.alignToDirection(target,
+            this.level.getLevelSettings().getDirectionChecker());
+        target.setPitch(this.player.getLocation().getPitch());
+
+        this.player.setFallDistance(0f);
+        this.player.setHealth(20.0D);
+
+        final Location finalTarget = target;
+        final int finalIndex = index;
+        TeleportUtils.teleportAsync(this.getPlugin(), this.player, finalTarget).thenAccept(success -> {
+            if (!this.player.isOnline()) return;
+            // Пока летел телепорт, забег мог закончиться штатно или игрок вышел с уровня.
+            if (this.currentState != State.RUNNING) return;
+
+            // ВОЗВРАТ СОСТОЯНИЯ ЗАБЕГА.
+            //
+            // Очки, комбо и счётчики попаданий откатываются к значениям на чекпоинте.
+            // Иначе смерть под конец уровня стоила бы игроку всего комбо и части очков,
+            // а шансов у него максимум четыре — наказание вышло бы несоразмерным.
+            if (this.checkpointRunSnapshot != null) {
+                this.runTracker.restore(this.checkpointRunSnapshot);
+            }
+            if (this.checkpointAccuracySnapshot != null) {
+                this.gameMoveHandler.getAccuracyChecker().restore(this.checkpointAccuracySnapshot);
+            } else {
+                // Слепка нет — хотя бы перематываем указатель сегмента: он умеет только
+                // расти, и без этого игрок мерился бы против участка далеко впереди.
+                this.gameMoveHandler.getAccuracyChecker().rewindTo(finalTarget);
+            }
+
+            UserActivity activity = this.getPlugin().get(ActivityManager.class).getActivity(this.player);
+            PlayActivity pa = null;
+            if (activity instanceof PlayActivity found) {
+                pa = found;
+            } else if (activity instanceof EditActivity editor) {
+                pa = editor.getTestingActivity();
+            }
+            if (pa != null) {
+                pa.resetTriggerIndexToPosition(this.getPassedDistancePublic(false));
+                pa.applyJudgementGrace(800L);
+            }
+            this.gameMoveHandler.applyTeleportGrace(1000L);
+            this.respawnGraceUntil = System.currentTimeMillis() + 400L;
+
+            // Время песни отматывается на отметку чекпоинта: и таймкод, и лайтшоу,
+            // и боссбар после отката показывают то же, что при обычном проходе.
+            this.songStartedAtMillis = System.currentTimeMillis()
+                - this.checkpointOffsets.get(finalIndex);
+            this.songStoppedAtMillis = 0L;
+
+            // НУМЕРАЦИЯ КУСКОВ.
+            //
+            // part1 - от старта до 1-го чекпоинта, part2 - от 1-го до 2-го и так далее.
+            // Значит с чекпоинта с индексом i (это (i+1)-й по счёту) играть надо part(i+2),
+            // а не part(i+1). Из-за этой единицы после смерти включался кусок ПЕРЕД
+            // чекпоинтом - то есть музыка уезжала обратно к началу трека.
+            this.playSliceAfterRespawn(finalIndex + 2);
+            this.showCheckpointAttempts(ATTEMPTS_SHOW_AFTER_FAIL_MILLIS, 0L);
+        });
+        return true;
+    }
+
+    /**
+     * Запустить кусок нарезки с указанного номера (1 — от старта до первого чекпоинта)
+     * и завести таймер на следующий кусок.
+     */
+    /**
+     * Запустить кусок после отката, дав клиенту время переварить остановку прошлого.
+     * <p>
+     * AMusic глушит звук отдельным пакетом. Если сразу за ним прислать пакет запуска,
+     * клиент нередко обрабатывает их в обратном порядке и глушит только что начатый
+     * кусок - получается тишина до самого следующего стыка. Пара тиков паузы это снимает.
+     */
+    private void playSliceAfterRespawn(int sliceNumber) {
+        this.getPlugin().getServer().getScheduler().runTaskLater(this.getPlugin(), () -> {
+            if (this.currentState != State.RUNNING) return;
+            if (!this.player.isOnline()) return;
+            this.playSliceFrom(sliceNumber);
+        }, 3L);
+    }
+
+    private void playSliceFrom(int sliceNumber) {
+        java.util.List<Integer> durations = this.level.getLevelSettings()
+            .getGameSettings().getSliceDurationsMillis();
+        if (sliceNumber < 1) sliceNumber = 1;
+        if (sliceNumber > durations.size()) return;
+        if (!this.player.isOnline()) return;
+
+        this.currentSlice = sliceNumber;
+        this.sliceStartedAtMillis = System.currentTimeMillis();
+        this.musicTracksManager.getPlatform().startPlayingSlice(this.player, sliceNumber);
+        this.scheduleNextSlice(durations.get(sliceNumber - 1));
+    }
+
+    /** Момент запуска текущего куска по системным часам. */
+    private volatile long sliceStartedAtMillis = 0L;
+
+    /**
+     * Следующий кусок заводится по РЕАЛЬНОЙ длительности предыдущего, которую померил
+     * ffmpeg на прокси. Считать по отметкам чекпоинтов нельзя: ogg режется по границам
+     * страниц, и куски отличаются от расчётных на десятки миллисекунд — за пару стыков
+     * это превратилось бы в слышимый разъезд.
+     */
+    private void scheduleNextSlice(int currentSliceMillis) {
+        this.stopSliceTask();
+        if (currentSliceMillis <= 0) return;
+
+        final long targetAtMillis = this.sliceStartedAtMillis + currentSliceMillis;
+        this.scheduleSliceCheck(targetAtMillis);
+    }
+
+    /**
+     * Стык кусков сверяется с СИСТЕМНЫМИ ЧАСАМИ, а не отсчитывается тиками.
+     * <p>
+     * Тик на просевшем сервере длится больше 50 мс, и отложенная на N тиков задача
+     * приходит позже реального конца куска. За несколько стыков это накопилось бы в
+     * слышимую паузу и разъезд музыки с уровнем. Поэтому задача просыпается заранее,
+     * проверяет часы и при необходимости досыпает.
+     */
+    private void scheduleSliceCheck(long targetAtMillis) {
+        long remaining = targetAtMillis - System.currentTimeMillis();
+        if (remaining <= 0L) {
+            this.playSliceFrom(this.currentSlice + 1);
+            return;
+        }
+
+        // Спим не более секунды за раз: так лаг любой длительности будет замечен.
+        long sleepMillis = Math.min(remaining, 1000L);
+        long delayTicks = Math.max(1L, sleepMillis / 50L);
+
+        this.sliceTask = this.getPlugin().getServer().getScheduler().runTaskLater(
+            this.getPlugin(),
+            () -> {
+                if (this.currentState != State.RUNNING) return;
+                if (!this.player.isOnline()) return;
+                this.scheduleSliceCheck(targetAtMillis);
+            },
+            delayTicks);
+    }
+
+    private void stopSliceTask() {
+        if (this.sliceTask == null) return;
+        try {
+            this.sliceTask.cancel();
+        } catch (Exception ignored) {
+        }
+        this.sliceTask = null;
+    }
+
     public void tryToSendTrackPiece() {
         double distance = this.getPassedDistance(true);
         int trackSectionNumber = (int) Math.floor(distance / BLOCKS_PER_SECOND) + 1;
@@ -361,8 +991,44 @@ public class Game {
         this.musicTracksManager.getPlatform().startPlayingTrackPiece(this.player, trackSectionNumber);
     }
 
+    /**
+     * Множитель сложности уровня, выставленный строителем в редакторе (по умолчанию 1.0).
+     * Это НЕ рейтинговое название сложности, а реальная жёсткость геймплея.
+     */
+    public double getDifficultyMultiplier() {
+        try {
+            return this.level.getLevelSettings().getGameSettings().getDifficultyMultiplier();
+        } catch (Exception e) {
+            return 1.0D;
+        }
+    }
+
+    /**
+     * Во сколько раз больнее бьёт уровень с поднятой сложностью.
+     * При сложности 9 урон почти в 6 раз сильнее обычного.
+     */
+    public double getDamageScale() {
+        double extra = Math.max(0.0D, this.getDifficultyMultiplier() - 1.0D);
+        return 1.0D + DAMAGE_GROW_PER_DIFFICULTY_LEVEL * extra;
+    }
+
+    /**
+     * Насколько чаще уровень с поднятой сложностью наносит периодический урон.
+     */
+    public double getDamageRateScale() {
+        double extra = Math.max(0.0D, this.getDifficultyMultiplier() - 1.0D);
+        return 1.0D + DAMAGE_RATE_GROW_PER_DIFFICULTY_LEVEL * extra;
+    }
+
+    /** Прирост силы урона за каждую единицу сложности сверх 1.0. */
+    public static final double DAMAGE_GROW_PER_DIFFICULTY_LEVEL = 0.6D;
+    /** Прирост частоты урона за каждую единицу сложности сверх 1.0. */
+    public static final double DAMAGE_RATE_GROW_PER_DIFFICULTY_LEVEL = 0.35D;
+
     public void applyDamage(double amount) {
         if (this.displayTimecode) return;
+
+        amount *= this.getDamageScale();
 
         double newHealth = Math.max(0.0D, this.player.getHealth() - amount);
         if (newHealth <= 0.0D) {
@@ -375,6 +1041,14 @@ public class Game {
     }
 
     public void failLevel(@Nullable Component reasonFirstLine, @Nullable Component reasonSecondLine) {
+        // Игрока только что откатило на чекпоинт — он ещё летит в телепорте.
+        // Любой проигрыш в этом окне игнорируется целиком.
+        if (this.isRespawnGrace()) return;
+
+        // Уровень с чекпоинтами не выкидывает игрока: его откатывает на последний
+        // пройденный чекпоинт, и музыка идёт с того же места.
+        if (this.tryRespawnAtCheckpoint(reasonFirstLine, reasonSecondLine)) return;
+
         if (this.currentState == State.RUNNING
             && this.hasModifier(Modifier.PRACTICE)
             && this.getDisplayAccuracy() >= 45.0D) {
@@ -437,13 +1111,13 @@ public class Game {
         CompletionParticle fallParticle = this.level.getLightShow().getLoseParticle();
 
         if (isNewPR) {
-            String gradeColor = grade.getFormatted().substring(0, 2);
+            String gradeColor = grade.getColorCode();
             this.sendProgressRecordMessage(submission);
 
-            Component title = LegacyComponentSerializer.legacyAmpersand().deserialize("&6&lНОВЫЙ РЕКОРД");
-            Component subtitle = LegacyComponentSerializer.legacyAmpersand().deserialize(
-                String.format(java.util.Locale.ROOT, "&fВы прошли уровень на %s%.0f%%", gradeColor, currentProgress)
-            );
+            String lang = PlayerLang.of(this.player);
+            Component title = Lang.text(lang, "game.title.record_personal");
+            Component subtitle = Lang.text(lang, "game.subtitle.progress",
+                "%progress%", String.format(java.util.Locale.ROOT, "%s%.0f%%", gradeColor, currentProgress));
 
             this.player.showTitle(Title.title(title, subtitle, FINISH_REASON_TITLE_TIMES));
             TeleportUtils.teleportAsync(this.getPlugin(), this.player, this.getAlignedSpawn()).whenComplete((success, throwable) -> {
@@ -474,6 +1148,12 @@ public class Game {
     }
 
     public void completeLevel() {
+        try {
+            this.getPlugin().get(ru.sortix.parkourbeat.tutorial.TutorialManager.class)
+                .onLevelCompleted(this.player);
+        } catch (Throwable ignored) {
+        }
+
         double currentAcc = this.getDisplayAccuracy();
         AccuracyGrade grade = this.getCurrentGrade();
         int score = this.runTracker.getScore();
@@ -489,26 +1169,25 @@ public class Game {
         Component title;
         Component subtitle;
 
-        String gradeColor = grade.getFormatted().substring(0, 2);
+        String gradeColor = grade.getColorCode();
+
+        String lang = PlayerLang.of(this.player);
+        String scored = Lang.raw(lang, "game.subtitle.scored",
+            "%score%", String.valueOf(score),
+            "%accuracy%", String.format(java.util.Locale.ROOT, "%s%.2f%%", gradeColor, currentAcc));
 
         if (isUnranked) {
-            title = LegacyComponentSerializer.legacyAmpersand().deserialize("&a&lУРОВЕНЬ ПРОЙДЕН");
-            subtitle = LegacyComponentSerializer.legacyAmpersand().deserialize("&7&lUNRANKED");
+            title = Lang.text(lang, "game.title.completed");
+            subtitle = Lang.text(lang, "game.subtitle.unranked");
         } else if (isGlobalRecord) {
-            title = LegacyComponentSerializer.legacyAmpersand().deserialize("&a&lНОВЫЙ РЕКОРД");
-            subtitle = LegacyComponentSerializer.legacyAmpersand().deserialize(
-                String.format(java.util.Locale.ROOT, "&fВы набрали &e%d&f очков и %s%.2f%%&f точности", score, gradeColor, currentAcc)
-            );
+            title = Lang.text(lang, "game.title.record_global");
+            subtitle = PbText.of(scored);
         } else if (isPersonalRecord) {
-            title = LegacyComponentSerializer.legacyAmpersand().deserialize("&6&lНОВЫЙ РЕКОРД");
-            subtitle = LegacyComponentSerializer.legacyAmpersand().deserialize(
-                String.format(java.util.Locale.ROOT, "&fВы набрали &e%d&f очков и %s%.2f%%&f точности", score, gradeColor, currentAcc)
-            );
+            title = Lang.text(lang, "game.title.record_personal");
+            subtitle = PbText.of(scored);
         } else {
-            title = LegacyComponentSerializer.legacyAmpersand().deserialize("&a&lУРОВЕНЬ ПРОЙДЕН");
-            subtitle = LegacyComponentSerializer.legacyAmpersand().deserialize(
-                "&fОценка: " + grade.getFormatted()
-            );
+            title = Lang.text(lang, "game.title.completed");
+            subtitle = Lang.text(lang, "game.subtitle.grade", "%grade%", grade.getFormatted());
         }
 
         this.player.showTitle(Title.title(title, subtitle, FINISH_REASON_TITLE_TIMES));
@@ -531,10 +1210,30 @@ public class Game {
     }
 
     @Nullable
+    private boolean isUnrankedLevel() {
+        return this.level.getLevelSettings().getGameSettings().getDifficulty() == LevelDifficulty.N_A;
+    }
+
+    /**
+     * Забег с откатами на чекпоинт не идёт в рекорды и статистику.
+     * <p>
+     * Иначе таблица лидеров ломается: пройти уровень с нуля и пройти его, умерев пять
+     * раз подряд у самого финиша — это совершенно разные результаты, а очки и точность
+     * у них получаются одинаковыми. Прохождение при этом засчитывается и показывается
+     * игроку как обычно, в зачёт не идёт только рекорд.
+     * <p>
+     * Если для проекта такое поведение не нужно — достаточно поставить здесь false.
+     */
+    public static final boolean CHECKPOINT_RESPAWNS_BREAK_RECORDS = true;
+
     private RunSubmission submitRunResult(boolean completed, double progressPercent) {
         if (this.runSubmitted) return null;
         if (this.displayTimecode) return null;
         if (this.modifiers.isActive(Modifier.PRACTICE)) return null;
+        if (CHECKPOINT_RESPAWNS_BREAK_RECORDS && this.checkpointRespawns > 0) return null;
+        // Уровень без сложности не прошёл модерацию. Записывать по нему рейтинг нельзя:
+        // иначе любой мог бы сделать уровень на секунду и фармить с него PP и рекорды.
+        if (this.isUnrankedLevel()) return null;
         if (!completed && progressPercent < 1.0D && this.runTracker.getTotalJudged() == 0) return null;
 
         StatisticsManager statistics;
@@ -588,61 +1287,68 @@ public class Game {
 
     private void sendSummaryChatMessage(double accuracy, AccuracyGrade grade, int score, int maxCombo, int misses,
                                         boolean isUnranked, @Nullable RunSubmission submission) {
-        StringBuilder message = new StringBuilder(String.format(java.util.Locale.ROOT,
-            "&a&lУровень пройден\n" +
-                "&fТочность: &e%.2f%% - %s\n" +
-                "&fОчков: &e%d\n" +
-                "&fМакс комбо: &ex%d\n" +
-                "&fПромахов: &e%d",
-            accuracy, grade.getFormatted(), score, maxCombo, misses
-        ));
+        String lang = PlayerLang.of(this.player);
+        StringBuilder message = new StringBuilder(Lang.raw(lang, "game.summary.header",
+            "%accuracy%", String.format(java.util.Locale.ROOT, "%.2f%%", accuracy),
+            "%grade%", grade.getFormatted(),
+            "%score%", String.valueOf(score),
+            "%combo%", String.valueOf(maxCombo),
+            "%miss%", String.valueOf(misses)));
 
         if (misses == 0) {
             message.append(" &7[&b&lFC&7]");
+        }
+
+        // Откаты на чекпоинт показываем отдельной строкой: пройти уровень с нуля
+        // и пройти его с пятью откатами — это очень разные достижения.
+        if (this.checkpointRespawns > 0) {
+            message.append("\n").append(Lang.raw(lang, "game.summary.checkpoints",
+                "%count%", String.valueOf(this.checkpointRespawns)));
+            if (CHECKPOINT_RESPAWNS_BREAK_RECORDS) {
+                message.append("\n").append(Lang.raw(lang, "game.summary.checkpoints_norecord"));
+            }
         }
 
         if (submission != null) {
             RunResult previous = submission.getPreviousPersonalRecord();
             if (submission.isPersonalRecord() && previous != null && previous.isCompleted()) {
                 int delta = submission.getScoreDelta();
-                message.append(String.format(java.util.Locale.ROOT,
-                    "\n&fПрошлый рекорд: &7очки %d &7→ %s%+d",
-                    previous.getScore(), delta >= 0 ? "&a" : "&c", delta));
+                message.append("\n").append(Lang.raw(lang, "game.summary.previous_personal",
+                    "%score%", String.valueOf(previous.getScore()),
+                    "%delta%", (delta >= 0 ? "&a" : "&c")
+                        + String.format(java.util.Locale.ROOT, "%+d", delta)));
             }
 
             RunResult previousGlobal = submission.getPreviousGlobalRecord();
             if (submission.isGlobalRecord() && previousGlobal != null) {
-                message.append(String.format(java.util.Locale.ROOT,
-                    "\n&fПрошлый рекорд уровня: &7%s &7(&7%d&7)",
-                    previousGlobal.getPlayerName(), previousGlobal.getScore()));
+                message.append("\n").append(Lang.raw(lang, "game.summary.previous_global",
+                    "%player%", previousGlobal.getPlayerName(),
+                    "%score%", String.valueOf(previousGlobal.getScore())));
             }
 
             if (!isUnranked && submission.getTopPosition() > 0) {
-                message.append(String.format(java.util.Locale.ROOT,
-                    "\n&fМесто на уровне: %s#%d&r &7из &f%d",
-                    positionColor(submission.getTopPosition()),
-                    submission.getTopPosition(), submission.getTopSize()));
+                message.append("\n").append(Lang.raw(lang, "game.summary.level_place",
+                    "%position%", positionColor(submission.getTopPosition())
+                        + "#" + submission.getTopPosition(),
+                    "%total%", String.valueOf(submission.getTopSize())));
 
                 StatisticsManager statisticsManager = this.getPlugin().get(StatisticsManager.class);
                 int globalRank = statisticsManager.getDisplayRank(this.player.getUniqueId());
                 if (globalRank > 0) {
-                    message.append(String.format(java.util.Locale.ROOT,
-                        "\n&fРанг на сервере: %s#%d&r &7из &f%d &7(по PP)",
-                        positionColor(globalRank), globalRank,
-                        statisticsManager.getRankedPlayersCount()));
+                    message.append("\n").append(Lang.raw(lang, "game.summary.server_rank",
+                        "%position%", positionColor(globalRank) + "#" + globalRank,
+                        "%total%", String.valueOf(statisticsManager.getRankedPlayersCount())));
                 }
             }
         }
 
         if (isUnranked) {
             int levelId = this.level.getLevelSettings().getGameSettings().getUniqueNumber();
-            message.append(String.format(java.util.Locale.ROOT,
-                "\n\n&3Вы прошли уровень, и мы вас поздравляем! Но уровень не прошёл модерацию на хорошее качество. Однако вы можете оценить его сложность с помощью &n/play %d",
-                levelId
-            ));
+            message.append("\n\n").append(Lang.raw(lang, "game.summary.unranked",
+                "%id%", String.valueOf(levelId)));
         }
 
-        this.player.sendMessage(LegacyComponentSerializer.legacyAmpersand().deserialize(message.toString()));
+        this.player.sendMessage(PbText.of(message.toString()));
     }
 
     private void sendProgressRecordMessage(@Nullable RunSubmission submission) {
@@ -651,11 +1357,9 @@ public class Game {
         if (previous == null || previous.isCompleted()) return;
 
         double delta = submission.getRun().getProgressPercent() - previous.getProgressPercent();
-        this.player.sendMessage(LegacyComponentSerializer.legacyAmpersand().deserialize(
-            String.format(java.util.Locale.ROOT,
-                "&fПрошлый рекорд: &7прогресс %.0f%% &7→ &a+%.0f%%",
-                previous.getProgressPercent(), delta)
-        ));
+        this.player.sendMessage(Lang.text(this.player, "game.summary.previous_progress",
+            "%previous%", String.format(java.util.Locale.ROOT, "%.0f%%", previous.getProgressPercent()),
+            "%delta%", String.format(java.util.Locale.ROOT, "%.0f%%", delta)));
     }
 
     @NonNull
@@ -735,6 +1439,8 @@ public class Game {
         this.resetRunningLevelGame(reasonFirstLine, reasonSecondLine, levelComplete);
         this.forceStopLevelGame();
         if (switchState) this.setCurrentState(State.READY);
+        this.getPlugin().get(ru.sortix.parkourbeat.replay.ReplayManager.class)
+            .cancelRecording(this.player.getUniqueId());
     }
 
     private void resetRunningLevelGame(@Nullable Component reasonFirstLine, @Nullable Component reasonSecondLine, boolean levelComplete) {
@@ -761,6 +1467,8 @@ public class Game {
         this.runTracker.setModifiers(this.modifiers.copy());
         this.lastGrade = AccuracyGrade.SS;
         this.lastBleedAtMillis = 0L;
+        this.reachedCheckpoint = -1;
+        this.checkpointRespawns = 0;
     }
     public void forceStopLevelGame() {
         this.safely("restore visibility", () -> this.getPlugin()
@@ -781,6 +1489,8 @@ public class Game {
         });
 
         this.safely("packets adapter", () -> this.packetsAdapter.setWatchingPosition(this.player, false));
+        this.safely("water cache", () -> clearWaterCache(this.player));
+        this.safely("slice timer", this::stopSliceTask);
         this.safely("stop music", this::stopMusic);
 
         this.safely("particles", () -> {
@@ -791,6 +1501,8 @@ public class Game {
 
         this.safely("boss bar", this::removeBossBar);
         this.safely("light show", () -> {
+            if (this.wonderRunner != null) this.wonderRunner.stopAll();
+            if (this.lampRunner != null) this.lampRunner.resetAll();
             if (this.lightShowRunner != null) this.lightShowRunner.rollbackToBase();
         });
     }
@@ -800,7 +1512,7 @@ public class Game {
             action.run();
         } catch (Throwable t) {
             this.getPlugin().getLogger().log(java.util.logging.Level.WARNING,
-                "Ошибка при завершении забега (" + what + ")", t);
+                Lang.raw(PlayerLang.of(this.player), "auto.game.safely.1") + what + ")", t);
         }
     }
 
@@ -811,6 +1523,10 @@ public class Game {
             this.lastTrackPieceNumber = 0;
         } else if (this.musicMode == MusicMode.FULL_TRACK) {
             this.musicTracksManager.getPlatform().stopPlayingTrackFull(this.player);
+        } else if (this.musicMode == MusicMode.CHECKPOINTS) {
+            this.stopSliceTask();
+            this.musicTracksManager.getPlatform().stopPlayingSlice(this.player, this.currentSlice);
+            this.currentSlice = 0;
         }
     }
 
@@ -848,15 +1564,26 @@ public class Game {
 
         this.runTracker.registerJump(result);
 
+        // Туториал должен реагировать на промах СРАЗУ и ощутимо, иначе правило
+        // "прыгать только на метках" остаётся просто текстом на экране.
+        if (result == JumpResult.MISS) {
+            try {
+                ru.sortix.parkourbeat.tutorial.TutorialManager tutorial =
+                    this.getPlugin().get(ru.sortix.parkourbeat.tutorial.TutorialManager.class);
+                if (tutorial.isActive(this.player)) tutorial.onMiss(this.player, this);
+            } catch (Throwable ignored) {
+            }
+        }
+
         Component points;
         if (result == JumpResult.MISS) {
             if (this.displayTimecode) {
-                points = LegacyComponentSerializer.legacyAmpersand().deserialize("&7MISS | &c-1HP");
+                points = PbText.of("&7MISS | &c-1HP");
             } else {
-                points = LegacyComponentSerializer.legacyAmpersand().deserialize("&7MISS");
+                points = PbText.of("&7MISS");
             }
         } else {
-            points = LegacyComponentSerializer.legacyAmpersand().deserialize(result.formatPoints());
+            points = PbText.of(result.formatPoints());
         }
 
         this.player.showTitle(Title.title(
@@ -866,12 +1593,12 @@ public class Game {
         ));
 
         if (this.hasModifier(Modifier.PERFECT) && result != JumpResult.PERFECT) {
-            this.failLevel(LOSE_TITLE, null);
+            this.failLevel(this.loseTitle(), null);
             return;
         }
 
-        if (this.hasModifier(Modifier.HARD) && (result == JumpResult.OK || result == JumpResult.MISS)) {
-            this.failLevel(LOSE_TITLE, null);
+        if (this.hasModifier(Modifier.SUDDEN_DEATH) && (result == JumpResult.OK || result == JumpResult.MISS)) {
+            this.failLevel(this.loseTitle(), null);
             return;
         }
     }
@@ -884,13 +1611,16 @@ public class Game {
         int interval = grade.getBleedIntervalSeconds();
         if (interval <= 0) return;
 
+        // На поднятой сложности кровотечение идёт заметно чаще.
+        long intervalMillis = (long) Math.max(200.0D, (interval * 1000.0D) / this.getDamageRateScale());
+
         long now = System.currentTimeMillis();
         if (this.lastBleedAtMillis == 0L) {
             this.lastBleedAtMillis = now;
             this.applyDamage(3.0D);
             return;
         }
-        if (now - this.lastBleedAtMillis < interval * 1000L) return;
+        if (now - this.lastBleedAtMillis < intervalMillis) return;
         this.lastBleedAtMillis = now;
 
         this.applyDamage(3.0D);
@@ -997,6 +1727,8 @@ public class Game {
 
         if (this.currentState == State.RUNNING) {
             this.tickGradeEffects();
+            this.updateReachedCheckpoint();
+            this.tickCheckpointAttempts();
 
             boolean isShortTestLevel = this.displayTimecode && this.level.getLevelSettings().getWorldSettings().getWaypoints().size() < 4;
 
@@ -1004,6 +1736,16 @@ public class Game {
                 this.completeLevel();
                 return;
             }
+        }
+
+        try {
+            if (this.portalRunner == null) {
+                this.portalRunner = new ru.sortix.parkourbeat.levels.PortalRunner(this.getPlugin(), this.level, this.player);
+            }
+            this.portalRunner.tick(this.currentState == State.RUNNING);
+        } catch (Exception e) {
+            this.getPlugin().getLogger().log(java.util.logging.Level.WARNING,
+                "Unable to tick portals of player " + this.player.getName(), e);
         }
 
         LightShowRunner runner = this.lightShowRunner;
@@ -1015,6 +1757,24 @@ public class Game {
                 long positionMillis = Math.round((distance / BLOCKS_PER_SECOND) * 1000.0D);
 
                 runner.tick(positionMillis);
+
+                // Чудоэффекты идут по той же шкале, что и остальное цветовое шоу:
+                // у каждого бегущего своя позиция в песне, поэтому и показ у каждого свой.
+                if (this.wonderRunner == null) {
+                    this.getPlugin().get(ru.sortix.parkourbeat.utils.wonder.WonderStorage.class)
+                        .ensureLoaded(this.level);
+                    this.wonderRunner = new ru.sortix.parkourbeat.levels.wonder.WonderRunner(
+                        this.player, this.level, this.level.getLightShow().getWonderEffects());
+                }
+                this.wonderRunner.tick(positionMillis, this.currentState == State.RUNNING);
+
+                if (this.lampRunner == null && this.level.getWorld() != null) {
+                    this.lampRunner = new ru.sortix.parkourbeat.levels.lamps.LampRunner(
+                        this.level.getWorld(), this.level.getLightShow().getLampWalls());
+                }
+                if (this.lampRunner != null) {
+                    this.lampRunner.tick(positionMillis, this.currentState == State.RUNNING);
+                }
             } catch (Exception e) {
                 this.getPlugin().getLogger().log(java.util.logging.Level.SEVERE,
                     "Unable to tick lightshow of player " + this.player.getName(), e);
@@ -1080,6 +1840,17 @@ public class Game {
     }
 
     public float getPassedProgress() {
+        // На 2D-уровне игрок стоит на месте, а едет кубик: расстояние по координате
+        // игрока тут всегда ноль, и прогресс надо брать у самого забега.
+        if (ru.sortix.parkourbeat.twod.TwoDManager.isTwoD(this.level)) {
+            try {
+                return this.getPlugin().get(ru.sortix.parkourbeat.twod.TwoDManager.class)
+                    .getProgress(this.player);
+            } catch (Throwable t) {
+                return 0f;
+            }
+        }
+
         float passedProgress = (float) (this.getPassedDistance(false) / this.level.getLevelSettings().getTotalLevelDistance());
         if (passedProgress < 0) return 0;
         if (passedProgress > 1) return 1;

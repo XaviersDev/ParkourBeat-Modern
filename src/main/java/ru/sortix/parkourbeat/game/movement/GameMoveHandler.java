@@ -62,7 +62,8 @@ public class GameMoveHandler {
         LevelSettings settings = game.getLevel().getLevelSettings();
         WorldSettings worldSettings = settings.getWorldSettings();
         this.accuracyChecker = new MovementAccuracyChecker(
-            worldSettings.getWaypoints(), settings.getDirectionChecker());
+            worldSettings.getWaypoints(), settings.getDirectionChecker(),
+            settings.getGameSettings().getDifficultyMultiplier());
 
         this.startWaypoint = settings.getStartWaypointLoc();
         this.finishWaypoint = settings.getFinishWaypointLoc();
@@ -75,6 +76,7 @@ public class GameMoveHandler {
 
     public void onReadyState(@NonNull Player player) {
         LevelSettings settings = this.game.getLevel().getLevelSettings();
+
         if (settings.getDirectionChecker().isCorrectDirection(this.startWaypoint, player.getLocation())) {
             this.game.start();
             if ((this.task == null || this.task.isCancelled()) && !player.isSprinting()) {
@@ -98,6 +100,10 @@ public class GameMoveHandler {
                 return;
             }
         }
+        // Игрока откатывает на чекпоинт: телепорт назад — это по определению движение
+        // против направления уровня, судить его нельзя, иначе откат зациклится.
+        if (this.game.isRespawnGrace()) return;
+
         double angle = getLeftOrRightRotationAngle(player);
         if (angle > MAX_LOOK_ANGLE) {
             if (DISPLAY_DEBUG_FAIL_REASONS) {
@@ -115,6 +121,7 @@ public class GameMoveHandler {
             : fromCoord - toCoord;
 
         double backwardTolerance = player.isOnGround() ? BACKWARD_TOLERANCE : BACKWARD_TOLERANCE + 0.75D;
+
         if (backwardAmount > backwardTolerance) {
             if (DISPLAY_DEBUG_FAIL_REASONS) {
                 this.game.failLevel(LangOptions.level_play_title_wrongdirection.getComponent(player, new Placeholders("%direction%", fromCoord + " -> " + toCoord)), null);
@@ -131,7 +138,13 @@ public class GameMoveHandler {
         if (!event.isSprinting()) {
             // Отпустил Ctrl — комбо обнуляется. Промах при этом не засчитывается:
             // максимальное комбо и точность остаются нетронутыми.
-            this.game.getRunTracker().resetCombo();
+            //
+            // В ВОДЕ КОМБО НЕ СБРАСЫВАЕТСЯ. Клиент сам снимает спринт при входе в воду
+            // и включает плавание, игрок Ctrl не отпускал. Урон за это мы уже не давали,
+            // а комбо всё равно обнулялось — это и был баг.
+            if (!Game.isInWater(player)) {
+                this.game.getRunTracker().resetCombo();
+            }
 
             if (!this.game.hasModifier(Modifier.PRACTICE) && !Game.isInWater(player)) {
                 this.startDamageTask(player,
@@ -140,9 +153,10 @@ public class GameMoveHandler {
                 );
             }
         } else {
-            if (this.task != null) {
-                this.task.cancel();
-            }
+            // Побежал снова — наказание снимается. Поле обязательно обнуляем: иначе
+            // отменённая задача остаётся висеть, и следующий startDamageTask
+            // запустит вторую параллельно с ней.
+            this.stopDamageTask();
         }
     }
 
@@ -152,11 +166,56 @@ public class GameMoveHandler {
     }
 
     @SuppressWarnings("SameParameterValue")
+    private long teleportGraceUntil = 0L;
+
+    /**
+     * Телепорт сбрасывает состояние спринта на клиенте, и сервер получает "перестал бежать"
+     * уже на выходе из портала. Игрок при этом Ctrl не отпускал. Поэтому сразу после
+     * телепорта наказание за отпущенный бег временно не включается.
+     */
+    public void applyTeleportGrace(long millis) {
+        this.teleportGraceUntil = System.currentTimeMillis() + Math.max(0L, millis);
+        if (this.task != null) {
+            this.task.cancel();
+            this.task = null;
+        }
+    }
+
+    /**
+     * Снять наказание за отпущенный бег. Вызывается и извне, и самой задачей, когда та
+     * поняла, что игрок на самом деле бежит.
+     */
+    public void stopDamageTask() {
+        if (this.task == null) return;
+        try {
+            this.task.cancel();
+        } catch (Exception ignored) {
+        }
+        this.task = null;
+    }
+
+    private boolean isTeleportGrace() {
+        return System.currentTimeMillis() < this.teleportGraceUntil;
+    }
+
+    /**
+     * Период тика урона за отпущенный бег. На поднятой сложности уровня бьёт чаще:
+     * при множителе 9 — каждый тик вместо каждого второго.
+     */
+    private long getDamageTaskPeriodTicks() {
+        double period = 2.0D / this.game.getDamageRateScale();
+        return (long) Math.max(1L, Math.round(period));
+    }
+
     private void startDamageTask(@NonNull Player player,
                                  @Nullable Component warnReasonFirstLine, @Nullable Component warnReasonSecondLine,
                                  @Nullable Component failReasonFirstLine, @Nullable Component failReasonSecondLine
     ) {
         if (Game.isInWater(player)) return;
+        if (this.isTeleportGrace()) return;
+
+        // Две задачи одновременно — это два титла и двойной урон. Старую всегда гасим.
+        this.stopDamageTask();
 
         player.playEffect(EntityEffect.HURT);
         player.playSound(player.getLocation(), Sound.ENTITY_WOLF_HURT, 1, 1);
@@ -170,11 +229,15 @@ public class GameMoveHandler {
                 }
 
                 boolean levelFailed;
-                int damage = NOT_SPRINT_DAMAGE_PER_PERIOD;
-                if (game.hasModifier(ru.sortix.parkourbeat.rating.Modifier.HARD)) {
+                double damage = NOT_SPRINT_DAMAGE_PER_PERIOD;
+                if (game.hasModifier(ru.sortix.parkourbeat.rating.Modifier.SUDDEN_DEATH)) {
                     damage *= 2;
                 }
-                if (player.getHealth() <= damage) {
+                // Урон, который будет реально нанесён с учётом сложности уровня
+                // (applyDamage сам домножает на getDamageScale, здесь считаем то же самое,
+                // чтобы корректно понять, хватит ли игроку здоровья).
+                double effectiveDamage = damage * game.getDamageScale();
+                if (player.getHealth() <= effectiveDamage) {
                     levelFailed = true;
                     game.failLevel(failReasonFirstLine, failReasonSecondLine);
                 } else {
@@ -194,6 +257,6 @@ public class GameMoveHandler {
                     this.cancel();
                 }
             }
-        }.runTaskTimer(this.game.getPlugin(), 0, 2);
+        }.runTaskTimer(this.game.getPlugin(), 0, this.getDamageTaskPeriodTicks());
     }
 }
