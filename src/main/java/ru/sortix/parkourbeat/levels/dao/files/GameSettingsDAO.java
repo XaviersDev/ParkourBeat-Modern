@@ -32,6 +32,17 @@ public class GameSettingsDAO {
         config.set("created_at_mills", gameSettings.getCreatedAtMills());
         config.set("custom_physics_enabled", gameSettings.isCustomPhysicsEnabled());
         config.set("difficulty", gameSettings.getDifficulty().name());
+        config.set("difficulty_multiplier", gameSettings.getDifficultyMultiplier());
+        config.set("sliced_playlist_id", gameSettings.getSlicedPlaylistId());
+        config.set("checkpoint_attempts", gameSettings.getCheckpointAttempts());
+        config.set("slice_offsets_millis", new ArrayList<>(gameSettings.getSliceOffsetsMillis()));
+        config.set("slice_durations_millis", new ArrayList<>(gameSettings.getSliceDurationsMillis()));
+        config.set("custom_textures", gameSettings.isCustomTextures());
+        config.set("chunk_width", gameSettings.getChunkWidth());
+        config.set("level_mode", gameSettings.getLevelMode().name());
+        gameSettings.getTwoDSettings().write(config, "two_d");
+        config.set("texture_version_range", gameSettings.getTextureVersionRange() == null
+            ? null : gameSettings.getTextureVersionRange().name());
 
         MusicTrack musicTrack = gameSettings.getMusicTrack();
         if (musicTrack != null) {
@@ -104,8 +115,24 @@ public class GameSettingsDAO {
 
         GameSettings gameSettings = new GameSettings(uniqueId, uniqueName, uniqueNumber, ownerId, ownerName, displayName, createdAtMills, customPhysicsEnabled, musicTrack, useTrackPieces, state, publicVisible);
 
+        gameSettings.setCustomTextures(config.getBoolean("custom_textures", false));
+        gameSettings.setChunkWidth(config.getInt("chunk_width", 1));
+        gameSettings.setLevelMode(ru.sortix.parkourbeat.twod.LevelMode.byName(
+            config.getString("level_mode"), ru.sortix.parkourbeat.twod.LevelMode.THREE_D));
+        gameSettings.setTwoDSettings(
+            ru.sortix.parkourbeat.twod.TwoDLevelSettings.read(config, "two_d"));
+        gameSettings.setTextureVersionRange(ru.sortix.parkourbeat.levels.TextureVersionRange
+            .byName(config.getString("texture_version_range")));
         try { gameSettings.setDifficulty(LevelDifficulty.valueOf(config.getString("difficulty", "N_A"))); }
         catch (Exception e) { gameSettings.setDifficulty(LevelDifficulty.N_A); }
+        gameSettings.setDifficultyMultiplier(config.getDouble("difficulty_multiplier",
+            ru.sortix.parkourbeat.levels.settings.GameSettings.MIN_DIFFICULTY_MULTIPLIER));
+        gameSettings.setCheckpointAttempts(config.getInt("checkpoint_attempts",
+            ru.sortix.parkourbeat.levels.settings.GameSettings.DEFAULT_CHECKPOINT_ATTEMPTS));
+        gameSettings.setSliceResult(
+            config.getString("sliced_playlist_id"),
+            config.getIntegerList("slice_offsets_millis"),
+            config.getIntegerList("slice_durations_millis"));
 
         gameSettings.setBossBarColor(LevelBossBarColor.byName(config.getString("boss_bar_color"), LevelBossBarColor.DEFAULT));
         gameSettings.setHideBossBar(config.getBoolean("hide_boss_bar", false));

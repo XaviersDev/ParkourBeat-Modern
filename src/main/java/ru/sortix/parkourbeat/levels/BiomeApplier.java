@@ -15,6 +15,7 @@ import javax.annotation.Nullable;
 @UtilityClass
 public class BiomeApplier {
     private final int Y_STEP = 4;
+    private static final long MAX_CHUNKS = 4096L;
 
     public void applyAll(@NonNull Level level) {
         for (BiomeZone zone : level.getLightShow().getBiomeZones()) {
@@ -76,6 +77,17 @@ public class BiomeApplier {
         java.util.List<org.bukkit.Chunk> ticketedChunks = new java.util.ArrayList<>();
 
         org.bukkit.plugin.Plugin owningPlugin = org.bukkit.Bukkit.getPluginManager().getPlugin("ParkourBeat");
+
+        // Единственная добавка к исходной логике: отказ вместо падения сервера.
+        // Зона в тысячу секунд разворачивалась в миллионы setBiome за один тик.
+        long chunksWide = ((long) (maxCoordinate - minCoordinate) >> 4) + 2L;
+        long chunksLong = ((long) (crossMax - crossMin) >> 4) + 2L;
+        if (chunksWide * chunksLong > MAX_CHUNKS) {
+            org.bukkit.Bukkit.getLogger().warning("[ParkourBeat] Биом-зона слишком большая: "
+                + (chunksWide * chunksLong) + " чанков при лимите " + MAX_CHUNKS
+                + ". Зона пропущена, уменьшите её длительность.");
+            return false;
+        }
 
         java.util.Set<Long> allChunkCoords = new java.util.TreeSet<>();
 

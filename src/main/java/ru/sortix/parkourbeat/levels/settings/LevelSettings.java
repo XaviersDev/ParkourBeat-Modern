@@ -1,3 +1,4 @@
+// ФАЙЛ: src/main/java/ru/sortix/parkourbeat/levels/settings/LevelSettings.java
 package ru.sortix.parkourbeat.levels.settings;
 
 import lombok.Getter;
@@ -33,10 +34,9 @@ public class LevelSettings {
         this.gameSettings = gameSettings;
         this.directionChecker = new DirectionChecker(worldSettings.getDirection());
         this.particleController = new ParticleController(plugin, world);
+        this.particleController.setDirectionChecker(this.directionChecker);
 
         this.recalculateWaypoints(world);
-
-        this.worldSettings.sortWaypoints(this.directionChecker);
     }
 
     public void recalculateWaypoints(@NonNull World world) {

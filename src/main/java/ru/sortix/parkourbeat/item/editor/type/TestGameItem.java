@@ -18,6 +18,11 @@ public class TestGameItem extends EditorItem {
 
     @Override
     public void onUse(@NonNull PlayerInteractEvent event, @NonNull EditActivity activity) {
+        // У 2D-уровней свой режим тестирования: обычный забег им не подходит вообще.
+        if (ru.sortix.parkourbeat.twod.TwoDManager.isTwoD(activity.getLevel())) {
+            this.plugin.get(ru.sortix.parkourbeat.twod.TwoDManager.class).toggleEditorTest(activity);
+            return;
+        }
         if (activity.isTesting()) activity.endTesting();
         else activity.startTesting();
     }

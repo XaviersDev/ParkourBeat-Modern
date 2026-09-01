@@ -1,3 +1,4 @@
+// ФАЙЛ: src/main/java/ru/sortix/parkourbeat/levels/LevelsManager.java
 package ru.sortix.parkourbeat.levels;
 
 import com.google.common.collect.Lists;
@@ -20,6 +21,7 @@ import ru.sortix.parkourbeat.levels.settings.LevelSettings;
 import ru.sortix.parkourbeat.levels.settings.WorldSettings;
 import ru.sortix.parkourbeat.lifecycle.PluginManager;
 import ru.sortix.parkourbeat.utils.StringUtils;
+import ru.sortix.parkourbeat.world.OutsideBlocksCleaner;
 import ru.sortix.parkourbeat.world.WorldsManager;
 
 import javax.annotation.Nullable;
@@ -27,6 +29,8 @@ import java.io.File;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
+
+import ru.sortix.parkourbeat.utils.text.PbText;
 
 public class LevelsManager implements PluginManager {
     @Getter
@@ -42,7 +46,13 @@ public class LevelsManager implements PluginManager {
     private final Map<World, Level> loadedLevelsByWorld = new HashMap<>();
     private final Set<ParticleController> particleControllers = new HashSet<>();
     private final BukkitTask particlesRenderingTask;
+    private final BukkitTask autoSaveTask;
     private int nextLevelNumber = 1;
+
+    private static final long AUTOSAVE_PERIOD_TICKS = 20L * 15L;
+
+    private final java.util.Set<UUID> changedWorlds = java.util.concurrent.ConcurrentHashMap.newKeySet();
+    private final java.util.Set<UUID> lockedLevels = java.util.concurrent.ConcurrentHashMap.newKeySet();
 
     public LevelsManager(@NonNull ParkourBeat plugin) {
         this.plugin = plugin;
@@ -56,9 +66,97 @@ public class LevelsManager implements PluginManager {
                 controller.tickParticles();
             }
         }, 0, 5);
+
+        this.autoSaveTask = plugin.getServer().getScheduler().runTaskTimer(plugin,
+            this::saveEditedLevels, AUTOSAVE_PERIOD_TICKS, AUTOSAVE_PERIOD_TICKS);
+    }
+
+    public void markWorldChanged(@NonNull UUID levelId) {
+        this.changedWorlds.add(levelId);
+    }
+
+    public boolean isLevelLocked(@NonNull UUID levelId) {
+        return this.lockedLevels.contains(levelId);
+    }
+
+    public void lockLevel(@NonNull UUID levelId) {
+        this.lockedLevels.add(levelId);
+    }
+
+    public void unlockLevel(@NonNull UUID levelId) {
+        this.lockedLevels.remove(levelId);
+    }
+
+    public void markWorldChanged(@NonNull World world) {
+        Level level = this.getLoadedLevel(world);
+        if (level != null) this.changedWorlds.add(level.getUniqueId());
+    }
+
+    public void saveEditedLevels() {
+        UUID worldToSave = null;
+
+        for (Level level : new ArrayList<>(this.loadedLevelsById.values())) {
+            if (!level.isEditing()) continue;
+
+            try {
+                this.saveLevelSettings(level.getUniqueId());
+            } catch (Exception e) {
+                this.plugin.getLogger().log(java.util.logging.Level.SEVERE,
+                    "Не удалось сохранить настройки уровня " + level.getUniqueId(), e);
+            }
+
+            if (worldToSave == null && this.changedWorlds.contains(level.getUniqueId())) {
+                worldToSave = level.getUniqueId();
+            }
+        }
+
+        if (worldToSave == null) return;
+        this.changedWorlds.remove(worldToSave);
+
+        Level level = this.loadedLevelsById.get(worldToSave);
+        if (level == null) return;
+
+        try {
+            this.dropBlocksOutsideLevel(level);
+            level.getWorld().save();
+        } catch (Exception e) {
+            this.changedWorlds.add(worldToSave);
+            this.plugin.getLogger().log(java.util.logging.Level.SEVERE,
+                "Не удалось автосохранить мир уровня " + worldToSave, e);
+        }
     }
 
     public File getDefaultLevelDirectory(World.Environment env) {
+        return this.getDefaultLevelDirectory(env, 1);
+    }
+
+    /**
+     * @param chunkWidth ширина будущего уровня в чанках
+     * @return папка шаблона; для широких уровней сначала ищется своя база,
+     * а если её ещё не сохранили - берётся обычная
+     */
+    /**
+     * @param twoD ищем базу для 2D-уровня
+     */
+    public File getDefaultLevelDirectory(World.Environment env, int chunkWidth, boolean twoD) {
+        if (twoD) {
+            if (chunkWidth >= 4) {
+                File wide = new File(this.plugin.getDataFolder(),
+                    "pb_default_level_2D_" + env.name() + "_4C");
+                if (wide.isDirectory()) return wide;
+            }
+            File dir = new File(this.plugin.getDataFolder(), "pb_default_level_2D_" + env.name());
+            if (dir.isDirectory()) return dir;
+        }
+        return this.getDefaultLevelDirectory(env, chunkWidth);
+    }
+
+    public File getDefaultLevelDirectory(World.Environment env, int chunkWidth) {
+        if (chunkWidth >= 4) {
+            File wide = new File(this.plugin.getDataFolder(),
+                "pb_default_level_" + env.name() + "_4C");
+            if (wide.isDirectory()) return wide;
+        }
         File dir = new File(this.plugin.getDataFolder(), "pb_default_level_" + env.name());
         if (dir.isDirectory()) {
             return dir;
@@ -87,6 +185,29 @@ public class LevelsManager implements PluginManager {
     @NonNull
     public CompletableFuture<Level> createLevel(
         @NonNull World.Environment environment, @NonNull UUID ownerId, @NonNull String ownerName, @NonNull String levelName) {
+        return this.createLevel(environment, ownerId, ownerName, levelName, 1);
+    }
+
+    /**
+     * @param chunkWidth ширина уровня в чанках (1 или 4)
+     */
+    @NonNull
+    public CompletableFuture<Level> createLevel(
+        @NonNull World.Environment environment, @NonNull UUID ownerId, @NonNull String ownerName,
+        @NonNull String levelName, int chunkWidth) {
+        return this.createLevel(environment, ownerId, ownerName, levelName, chunkWidth,
+            ru.sortix.parkourbeat.twod.LevelMode.THREE_D);
+    }
+
+    /**
+     * @param levelMode обычный 3D-уровень или 2D-уровень
+     */
+    @NonNull
+    public CompletableFuture<Level> createLevel(
+        @NonNull World.Environment environment, @NonNull UUID ownerId, @NonNull String ownerName,
+        @NonNull String levelName, int chunkWidth,
+        @NonNull ru.sortix.parkourbeat.twod.LevelMode levelMode) {
+        boolean twoD = levelMode.isTwoD();
         CompletableFuture<Level> result = new CompletableFuture<>();
         UUID levelId = this.getNextLevelId();
         WorldCreator worldCreator = this.levelsSettings.getLevelSettingDAO().newWorldCreator(levelId);
@@ -94,7 +215,7 @@ public class LevelsManager implements PluginManager {
         worldCreator.environment(environment);
         worldCreator.generateStructures(false);
 
-        File defaultLevelDirectory = this.getDefaultLevelDirectory(environment);
+        File defaultLevelDirectory = this.getDefaultLevelDirectory(environment, chunkWidth, twoD);
         if (!defaultLevelDirectory.isDirectory()) {
             this.plugin
                 .getLogger()
@@ -114,7 +235,7 @@ public class LevelsManager implements PluginManager {
                     this.prepareLevelWorld(world, true);
 
                     int uniqueNumber = this.nextLevelNumber++;
-                    Component displayName = net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer.legacyAmpersand().deserialize(levelName);
+                    Component displayName = PbText.vanilla(levelName);
 
                     LevelSettings levelSettings = LevelSettings.create(
                         this.plugin,
@@ -127,12 +248,52 @@ public class LevelsManager implements PluginManager {
                         ownerName
                     );
 
-                    // Очищаем шаблонную линию и оставляем ТОЛЬКО одну стартовую точку!
+                    // Ширину выставляем до первой записи настроек, иначе область
+                    // редактирования посчитается по значению по умолчанию.
+                    levelSettings.getGameSettings().setChunkWidth(chunkWidth);
+                    levelSettings.getGameSettings().setLevelMode(levelMode);
+
+                    // Для широких уровней берём их собственный шаблон, если он сохранён:
+                    // старт, финиш и спавн у него свои, от узкой базы они не подходят.
+                    WorldSettings defaultSettings =
+                        Settings.getDefaultSettings(environment, chunkWidth, twoD);
+
+                    // ТОЛЬКО СТАРТ, БЕЗ ШАБЛОННОГО ПУТИ.
+                    //
+                    // Раньше новый уровень получал сразу пару "старт-финиш" из шаблона.
+                    // Финиш при этом стоял в заранее заданном месте, а строитель вёл
+                    // трассу от старта куда ему нужно - и, как правило, проходил мимо
+                    // шаблонного финиша или дальше него. В списке точек порядок - это
+                    // порядок прохождения, поэтому уровень оказывался с финишем ПЕРЕД
+                    // стартом: сначала конец, потом начало. Пройти такое нельзя.
+                    //
+                    // Теперь ставится ровно одна точка - стартовая. Финишем становится
+                    // последняя точка пути из частиц, то есть та, которую строитель
+                    // поставил последней; раньше старта она не окажется никогда.
+                    // Сам старт при необходимости переносится через меню редактора
+                    // (кнопка над "Точкой спавна").
+                    org.bukkit.Location templateStart =
+                        defaultSettings.getStartWaypoint().toLocation(world);
+
                     levelSettings.getWorldSettings().getWaypoints().clear();
-                    WorldSettings defaultSettings = Settings.getDefaultSettings(environment);
                     levelSettings.getWorldSettings().getWaypoints().add(new Waypoint(
-                        defaultSettings.getStartWaypoint().toLocation(world),
-                        0, EditTrackPointsItem.DEFAULT_PARTICLES_COLOR));
+                        templateStart, 0, EditTrackPointsItem.DEFAULT_PARTICLES_COLOR));
+
+                    // Спавн тоже берётся из шаблона: без этого новый уровень появлялся
+                    // со спавном по умолчанию, а не там, где его поставил админ.
+                    // Мир у скопированной точки чужой - переставляем на новый, иначе
+                    // телепорт уедет в мир-шаблон.
+                    org.bukkit.Location templateSpawn = defaultSettings.getSpawn().clone();
+                    templateSpawn.setWorld(world);
+                    levelSettings.getWorldSettings().setSpawn(templateSpawn);
+
+                    // Список точек заменили, но границы уровня (старт, финиш и нижняя
+                    // высота мира) считаются из него отдельным вызовом. Без него в полях
+                    // оставались значения от прежней базы: путь из частиц рисовался уже
+                    // новый, а маркеры старта и финиша висели на старом месте - и
+                    // перескакивали только после первого клика по частице, потому что
+                    // редактор как раз и дёргает updateBorders().
+                    levelSettings.getWorldSettings().updateBorders();
 
                     levelSettings.recalculateWaypoints(world);
                     levelSettings.updateParticleLocations();
@@ -174,6 +335,11 @@ public class LevelsManager implements PluginManager {
         Level level = getLoadedLevel(levelId);
         if (level != null) {
             result.complete(level);
+            return result;
+        }
+
+        if (this.lockedLevels.contains(levelId)) {
+            result.complete(null);
             return result;
         }
 
@@ -220,8 +386,14 @@ public class LevelsManager implements PluginManager {
                 return;
             }
 
+
             this.availableLevels.remove(settings);
             this.levelsSettings.getLevelSettingDAO().deleteLevelWorldAndSettings(levelId);
+            try {
+                this.plugin.get(ru.sortix.parkourbeat.activity.EditorSessionsManager.class)
+                    .removeLevel(levelId);
+            } catch (Exception ignored) {
+            }
             result.complete(true);
         });
         return result;
@@ -235,6 +407,7 @@ public class LevelsManager implements PluginManager {
         CompletableFuture<Boolean> result = new CompletableFuture<>();
         LevelSettingDAO dao = this.levelsSettings.getLevelSettingDAO();
 
+        ru.sortix.parkourbeat.twod.TwoDCoins.despawn(level);
         CompletableFuture<Boolean> worldUnloading;
         World world = dao.getBukkitWorld(levelId);
         if (world == null) {
@@ -322,6 +495,11 @@ public class LevelsManager implements PluginManager {
         return result;
     }
 
+    @NonNull
+    public Collection<Level> getLoadedLevels() {
+        return new ArrayList<>(this.loadedLevelsById.values());
+    }
+
     public void saveLevelSettings(@NonNull UUID levelId) {
         this.levelsSettings.saveLevelSettings(levelId);
     }
@@ -330,15 +508,27 @@ public class LevelsManager implements PluginManager {
         this.levelsSettings.saveGameSettings(gameSettings);
     }
 
+    /**
+     * Убирает всё, что построено за границей уровня, чтобы оно не попало в сохранение.
+     * <p>
+     * Вызывать строго ПЕРЕД {@code world.save()}. Раньше здесь стояла отгрузка таких чанков
+     * без сохранения, но чанк, в котором стоит сам строитель, отгрузить невозможно - и его
+     * содержимое всё равно уходило на диск. Теперь блоки удаляются, а очищенный чанк
+     * сохраняется намеренно: так стирается и то, что успело записаться раньше.
+     */
+    private void dropBlocksOutsideLevel(@NonNull Level level) {
+        for (org.bukkit.Chunk chunk : level.getWorld().getLoadedChunks()) {
+            if (level.isChunkInside(chunk)) continue;
+            // Пустой чанк за границей записывать на диск незачем - отгружаем без сохранения.
+            if (!OutsideBlocksCleaner.clearChunk(chunk)) chunk.unload(false);
+        }
+    }
+
     public void saveLevelSettingsAndBlocks(@NonNull Level level) {
         this.saveLevelSettings(level.getUniqueId());
         try {
             World world = level.getWorld();
-            for (org.bukkit.Chunk chunk : world.getLoadedChunks()) {
-                if (!level.isChunkInside(chunk)) {
-                    chunk.unload(false);
-                }
-            }
+            this.dropBlocksOutsideLevel(level);
 
             world.save();
         } catch (Exception e) {
@@ -395,6 +585,8 @@ public class LevelsManager implements PluginManager {
         world.setKeepSpawnInMemory(false);
         world.setAutoSave(false);
 
+        setBooleanGameRule(world, "SPECTATORS_GENERATE_CHUNKS", true);
+
         if (!updateGameRules) return;
 
         setBooleanGameRule(world, "ANNOUNCE_ADVANCEMENTS", false);
@@ -413,7 +605,6 @@ public class LevelsManager implements PluginManager {
         setBooleanGameRule(world, "NATURAL_REGENERATION", false);
         setBooleanGameRule(world, "REDUCED_DEBUG_INFO", false);
         setBooleanGameRule(world, "SHOW_DEATH_MESSAGES", false);
-        setBooleanGameRule(world, "SPECTATORS_GENERATE_CHUNKS", false);
         setBooleanGameRule(world, "DISABLE_RAIDS", true);
         setBooleanGameRule(world, "DO_INSOMNIA", false);
         setBooleanGameRule(world, "DO_IMMEDIATE_RESPAWN", true);
@@ -428,18 +619,26 @@ public class LevelsManager implements PluginManager {
         setIntegerGameRule(world, "SPAWN_RADIUS", 0);
     }
 
+    @Nullable
+    private static GameRule<?> findGameRule(@NonNull String name) {
+        try {
+            Object value = GameRule.class.getField(name).get(null);
+            if (value instanceof GameRule) return (GameRule<?>) value;
+        } catch (Throwable ignored) {
+        }
+        return GameRule.getByName(name);
+    }
+
     private void setBooleanGameRule(@NonNull World world, @NonNull String name, boolean newValue) {
-        GameRule<?> byName = GameRule.getByName(name);
-        if (byName == null) return;
-        //noinspection unchecked
-        world.setGameRule((GameRule<Boolean>) byName, newValue);
+        GameRule<?> rule = findGameRule(name);
+        if (rule == null || rule.getType() != Boolean.class) return;
+        world.setGameRule((GameRule<Boolean>) rule, newValue);
     }
 
     private void setIntegerGameRule(@NonNull World world, @NonNull String name, int newValue) {
-        GameRule<?> byName = GameRule.getByName(name);
-        if (byName == null) return;
-        //noinspection unchecked
-        world.setGameRule((GameRule<Integer>) byName, newValue);
+        GameRule<?> rule = findGameRule(name);
+        if (rule == null || rule.getType() != Integer.class) return;
+        world.setGameRule((GameRule<Integer>) rule, newValue);
     }
 
     @Nullable
@@ -460,6 +659,9 @@ public class LevelsManager implements PluginManager {
         if (!this.particlesRenderingTask.isCancelled()) {
             this.particlesRenderingTask.cancel();
         }
+        if (!this.autoSaveTask.isCancelled()) {
+            this.autoSaveTask.cancel();
+        }
 
         Location spawn = Settings.getLobbySpawn();
         for (Map.Entry<World, Level> entry : this.loadedLevelsByWorld.entrySet()) {
@@ -470,11 +672,7 @@ public class LevelsManager implements PluginManager {
 
             this.levelsSettings.saveLevelSettings(level.getUniqueId());
             try {
-                for (org.bukkit.Chunk chunk : world.getLoadedChunks()) {
-                    if (!level.isChunkInside(chunk)) {
-                        chunk.unload(false);
-                    }
-                }
+                this.dropBlocksOutsideLevel(level);
                 world.save();
             } catch (Exception e) {
                 this.plugin.getLogger().log(
