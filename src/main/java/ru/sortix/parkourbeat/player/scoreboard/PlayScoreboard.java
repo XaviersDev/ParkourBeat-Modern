@@ -1,5 +1,7 @@
 package ru.sortix.parkourbeat.player.scoreboard;
 
+import ru.sortix.parkourbeat.utils.lang.PlayerLang;
+
 import net.kyori.adventure.text.Component;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
@@ -30,7 +32,7 @@ public class PlayScoreboard implements ParkourBeatScoreboard {
 
     @Override
     public void update() {
-        String lang = this.player.getLocale().toLowerCase();
+        String lang = PlayerLang.of(this.player);
 
         ru.sortix.parkourbeat.rating.RunTracker run = this.game.getRunTracker();
         int currentCombo = run.getCombo();

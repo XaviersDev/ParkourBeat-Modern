@@ -3,14 +3,17 @@ package ru.sortix.parkourbeat.rating;
 import lombok.Getter;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
+import ru.sortix.parkourbeat.utils.text.Theme;
 
 @Getter
 @RequiredArgsConstructor
 public enum JumpResult {
-    PERFECT(300, "&b"),
-    GOOD(100, "&e"),
-    OK(50, "&c"),
-    MISS(0, "&7");
+    // Цвета попаданий - опознавательные знаки, как и оценки: игрок ловит их боковым
+    // зрением на лету. Поэтому коды прямые, палитра плагина их не перекрашивает.
+    PERFECT(300, Theme.V_AQUA),
+    GOOD(100, Theme.V_YELLOW),
+    OK(50, Theme.V_RED),
+    MISS(0, Theme.V_GRAY);
 
     /**
      * Raw base points before the combo multiplier.

@@ -112,6 +112,34 @@ public class RunTracker {
         return this.modifiers.getTotalMultiplier();
     }
 
+    /**
+     * Слепок забега на момент взятия чекпоинта.
+     * <p>
+     * Сохраняются не только очки и комбо, но и счётчики попаданий: иначе после отката
+     * очки вернулись бы, а промах, который игрока и убил, продолжал бы висеть в
+     * точности. Откат на чекпоинт — это возврат к состоянию, а не частичная амнистия.
+     */
+    public record Snapshot(int score, int rawScore, int combo, int maxCombo,
+                           int perfectCount, int goodCount, int okCount, int missCount) {
+    }
+
+    @NonNull
+    public Snapshot snapshot() {
+        return new Snapshot(this.score, this.rawScore, this.combo, this.maxCombo,
+            this.perfectCount, this.goodCount, this.okCount, this.missCount);
+    }
+
+    public void restore(@NonNull Snapshot snapshot) {
+        this.score = snapshot.score();
+        this.rawScore = snapshot.rawScore();
+        this.combo = snapshot.combo();
+        this.maxCombo = snapshot.maxCombo();
+        this.perfectCount = snapshot.perfectCount();
+        this.goodCount = snapshot.goodCount();
+        this.okCount = snapshot.okCount();
+        this.missCount = snapshot.missCount();
+    }
+
     public void reset() {
         this.score = 0;
         this.rawScore = 0;
