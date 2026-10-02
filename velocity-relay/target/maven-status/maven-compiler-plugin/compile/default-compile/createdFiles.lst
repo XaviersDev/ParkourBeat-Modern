@@ -1,9 +1,12 @@
 ru\sortix\parkourbeat\packrelay\PackWatchdog$Attempt.class
 ru\sortix\parkourbeat\packrelay\web\AMusicMerge.class
+ru\sortix\parkourbeat\packrelay\AMusicInitializator.class
 ru\sortix\parkourbeat\packrelay\web\UploadTokens$Session.class
 ru\sortix\parkourbeat\packrelay\web\OggValidator.class
 velocity-plugin.json
 ru\sortix\parkourbeat\packrelay\web\OggValidator$Page.class
+ru\sortix\parkourbeat\packrelay\AMusicInitializator$1.class
+ru\sortix\parkourbeat\packrelay\AMusicInitializator$LoginHandlerPB.class
 ru\sortix\parkourbeat\packrelay\web\TexturePackValidator.class
 ru\sortix\parkourbeat\packrelay\web\OggValidator$Result.class
 ru\sortix\parkourbeat\packrelay\web\TextureRegistry$1.class
@@ -16,6 +19,7 @@ ru\sortix\parkourbeat\packrelay\web\MultipartReader$Part.class
 ru\sortix\parkourbeat\packrelay\web\WebBridge.class
 ru\sortix\parkourbeat\packrelay\web\TrackRegistry.class
 ru\sortix\parkourbeat\packrelay\web\TrackRegistry$Entry.class
+ru\sortix\parkourbeat\packrelay\AMusicInitializator$ProxyShutdownHandlerPB.class
 ru\sortix\parkourbeat\packrelay\web\UploadServer$1.class
 ru\sortix\parkourbeat\packrelay\web\AMusicMerge$State.class
 ru\sortix\parkourbeat\packrelay\web\WebConfig.class
@@ -36,6 +40,7 @@ ru\sortix\parkourbeat\packrelay\PackWatchdog.class
 ru\sortix\parkourbeat\packrelay\slicer\TrackAnalyzer$Result.class
 ru\sortix\parkourbeat\packrelay\RelayConfig.class
 ru\sortix\parkourbeat\packrelay\ParkourBeatPackRelay.class
+ru\sortix\parkourbeat\packrelay\PackMergeSourceMap.class
 ru\sortix\parkourbeat\packrelay\web\TextureRegistry.class
 ru\sortix\parkourbeat\packrelay\AMusicPatcher$1.class
 ru\sortix\parkourbeat\packrelay\web\TexturePackValidator$Status.class
