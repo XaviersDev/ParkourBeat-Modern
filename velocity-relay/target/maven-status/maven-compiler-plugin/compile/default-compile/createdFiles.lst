@@ -5,6 +5,7 @@ ru\sortix\parkourbeat\packrelay\web\UploadTokens$Session.class
 ru\sortix\parkourbeat\packrelay\web\OggValidator.class
 velocity-plugin.json
 ru\sortix\parkourbeat\packrelay\web\OggValidator$Page.class
+ru\sortix\parkourbeat\packrelay\ParkourBeatPackRelay$1.class
 ru\sortix\parkourbeat\packrelay\AMusicInitializator$1.class
 ru\sortix\parkourbeat\packrelay\AMusicInitializator$LoginHandlerPB.class
 ru\sortix\parkourbeat\packrelay\web\TexturePackValidator.class
