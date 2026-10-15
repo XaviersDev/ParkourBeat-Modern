@@ -1,24 +1,51 @@
 package ru.sortix.parkourbeat.levels;
 
 import lombok.Getter;
+import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
+import org.bukkit.Material;
+import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.meta.ItemMeta;
 
 /**
  * Сложности уровня.
  * <p>
  * Названия обёрнуты в {@code <v>}: это опознавательные цвета, такие же как у оценок за
- * прыжок, и палитра оформления их перекрашивать не должна. Без обёртки §a у EASY уезжал
- * в тематический зелёный, и все сложности сливались в один оттенок.
+ * прыжок, и палитра оформления их перекрашивать не должна.
+ * <p>
+ * Порядок важен: по нему сортируются списки уровней, и по нему же берутся картинки
+ * из ресурспака (кубы, плашки, переходы). NORMAL вставлен между EASY и HARD; в
+ * файлах сложность хранится по имени, поэтому старые уровни не сдвигаются.
+ * <p>
+ * Иконки - больше не головы, а бумага с CustomModelData: текстуры лежат в РП
+ * (assets/parkourbeat/textures/item/difficulty).
  */
 @Getter
 @RequiredArgsConstructor
 public enum LevelDifficulty {
-    N_A("<v>§7N/A</v>", "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvZTU0NjFhMjE1YjMyNWZiZGY4OTJkYjY3YjdiZmI2MGFkMmJmMTU4MGRjOTY4YTE1ZGZiMzA0Y2NkNWU3NGRiIn19fQ=="),
-    EASY("<v>§aEASY</v>", "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvNWE1NmEwYjVlYjVhZjViNDY1NzA4MDk4NDljNmQ5MWVhYzgzMzUzZTZhMDZhYjE1MjIwNDdlMzRkM2Q4MTkxMCJ9fX0="),
-    HARD("<v>§eHARD</v>", "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvMjY3ODk2MGU3ODMzMWFjZjEyOTg5NDE2OWI2MTQxNmZiYTFhZDc0MTkwNzUzNGNkN2I1ZjIyYzcxM2VkMTdiNiJ9fX0="),
-    EXPERT("<v>§c§oEXPERT</v>", "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvZmQ1MDYzN2MwZGUyMzdmMDVlZjUxMjM4MzFhZWY5NzA3NmI3ZDVlMTQ3YTQyNWZlMTA0YzliOTQ0ZGIwNGRlMCJ9fX0="),
-    EXPERT_PLUS("<v>§d§o§lEXPERT+</v>", "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvNjEwYzc1YzI5ZWE4MjhkYjBmODVjN2FkZDcyODAxZjFhNGY5ZTcwZjI5NDc2ZWFiYTk2OTA2ZjY5YzM1YjBjYSJ9fX0=");
+    N_A("<v>§7N/A</v>"),
+    EASY("<v>§aEASY</v>"),
+    NORMAL("<v>§eNORMAL</v>"),
+    HARD("<v>§6HARD</v>"),
+    EXPERT("<v>§c§oEXPERT</v>"),
+    EXPERT_PLUS("<v>§d§o§lEXPERT+</v>");
+
+    /** CustomModelData иконок: 7100 + порядковый номер (совпадает с РП). */
+    public static final int MODEL_DATA_BASE = 7100;
 
     private final String displayName;
-    private final String headBase64;
+
+    public int getCustomModelData() {
+        return MODEL_DATA_BASE + this.ordinal();
+    }
+
+    /** Иконка сложности для меню (куб из ресурспака). */
+    @NonNull
+    public ItemStack createIcon() {
+        ItemStack item = new ItemStack(Material.PAPER);
+        ItemMeta meta = item.getItemMeta();
+        meta.setCustomModelData(this.getCustomModelData());
+        item.setItemMeta(meta);
+        return item;
+    }
 }

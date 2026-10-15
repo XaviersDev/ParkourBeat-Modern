@@ -23,10 +23,22 @@ import java.util.List;
  * Список друзей: кто в сети, чем занят, быстрый переход к другу и общие права.
  */
 public class FriendsMenu extends ParkourBeatInventory {
+    // Новая раскладка (фон menu_friends): витрина 9x4, страницы под ней, снизу панель кнопок.
+    static {
+        layout(FriendsMenu.class, 6, 3, 39, "left");
+        layout(FriendsMenu.class, 6, 7, 41, "right");
+        layout(FriendsMenu.class, 6, 5, 45, null);
+        layout(FriendsMenu.class, 6, 2, 47, null);
+        layout(FriendsMenu.class, 6, 4, 49, null);
+        layout(FriendsMenu.class, 6, 6, 51, null);
+        layout(FriendsMenu.class, 6, 8, 53, null);
+    }
+
     private static final int[] SLOTS = {
-        10, 11, 12, 13, 14, 15, 16,
-        19, 20, 21, 22, 23, 24, 25,
-        28, 29, 30, 31, 32, 33, 34
+        0, 1, 2, 3, 4, 5, 6, 7, 8,
+        9, 10, 11, 12, 13, 14, 15, 16, 17,
+        18, 19, 20, 21, 22, 23, 24, 25, 26,
+        27, 28, 29, 30, 31, 32, 33, 34, 35
     };
 
     private final @NonNull Player viewer;
@@ -37,7 +49,7 @@ public class FriendsMenu extends ParkourBeatInventory {
     }
 
     public FriendsMenu(@NonNull ParkourBeat plugin, String lang, @NonNull Player viewer, int page) {
-        super(plugin, 6, lang, Lang.item(lang, "inventory.friends.title"));
+        super(plugin, 6, lang, ru.sortix.parkourbeat.ui.Glyphs.menuTitle(ru.sortix.parkourbeat.ui.Glyphs.menuList("friends", lang), ru.sortix.parkourbeat.ui.Icons.Icon.FRIEND.component().append(net.kyori.adventure.text.Component.text(" ")).append(Lang.item(lang, "inventory.friends.title"))));
         this.viewer = viewer;
         this.page = page;
         this.render();

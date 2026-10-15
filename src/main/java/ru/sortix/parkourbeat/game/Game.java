@@ -494,6 +494,20 @@ public class Game {
 
         this.songStartedAtMillis = System.currentTimeMillis();
         this.songStoppedAtMillis = 0L;
+        // Шоу из субтитров уровня - по времени трека (ui/lyrics).
+        try {
+            java.util.List<ru.sortix.parkourbeat.ui.lyrics.LyricCue> lyrics =
+                ru.sortix.parkourbeat.inventory.type.editor.LyricsMenu.cues(this.level.getLevelSettings().getGameSettings());
+            if (!lyrics.isEmpty()) {
+                long startedAt = this.songStartedAtMillis;
+                ru.sortix.parkourbeat.ui.lyrics.LyricsPlayer.start(org.bukkit.plugin.java.JavaPlugin.getProvidingPlugin(Game.class), this.player, lyrics,
+                    this.level.getLevelSettings().getGameSettings().getLyricsStyle(),
+                    this.level.getLevelSettings().getGameSettings().getLyricsReveal(),
+                    this::getSongTimeMillis,
+                    () -> this.songStartedAtMillis == startedAt && this.songStoppedAtMillis == 0L);
+            }
+        } catch (Throwable ignored) {
+        }
         this.runSubmitted = false;
         this.reachedCheckpoint = -1;
         this.checkpointRespawns = 0;
@@ -1550,7 +1564,8 @@ public class Game {
     private void sendSummaryChatMessage(double accuracy, AccuracyGrade grade, int score, int maxCombo, int misses,
                                         boolean isUnranked, @Nullable RunSubmission submission) {
         String lang = PlayerLang.of(this.player);
-        StringBuilder message = new StringBuilder(Lang.raw(lang, "game.summary.header",
+        // Итог забега: одна иконка в начале, текст - капителями (ключи game.summary.* в SmallCaps).
+        StringBuilder message = new StringBuilder("<i:check> ").append(Lang.raw(lang, "game.summary.header",
             "%accuracy%", String.format(java.util.Locale.ROOT, "%.2f%%", accuracy),
             "%grade%", grade.getFormatted(),
             "%score%", String.valueOf(score),
@@ -1559,7 +1574,7 @@ public class Game {
 
         // Полное комбо с откатом не бывает: откат - это та же ошибка, просто прощённая.
         if (misses == 0 && this.checkpointRespawns == 0) {
-            message.append(" &7[&b&lFC&7]");
+            message.append(" &7[&b&l").append(ru.sortix.parkourbeat.ui.SmallCaps.convert("FC")).append("&7]");
         }
 
         // Откаты на чекпоинт показываем отдельной строкой: пройти уровень с нуля
@@ -1862,22 +1877,41 @@ public class Game {
             }
         }
 
-        Component points;
+        // Плашка попадания из РП: ВЕЛИКОЛЕПНО / ОТЛИЧНО / ПЛОХО / УЖАСНО (+ очки).
+        Component rate = ru.sortix.parkourbeat.ui.Glyphs.glyph(
+            ru.sortix.parkourbeat.ui.Glyphs.rate(result, PlayerLang.of(this.player)));
+        // Сабтайтл как раньше: «+300 / +100 / +50». Промах - плашка «УЖАСНО».
+        // Плашка попадания - отдельно в актионбаре и гаснет с той же скоростью.
+        // Что показывать - по личным настройкам игрока (меню «Интерфейс»):
+        //   классика - «+300» крупно в сабтайтле; мини - мелко нашими цифрами в актионбаре; выкл.
+        //   плашка оценки в актионбаре - отдельно вкл/выкл.
+        ru.sortix.parkourbeat.ui.HudSettings.Points mode = ru.sortix.parkourbeat.ui.HudSettings.points(this.player);
+        boolean banner = ru.sortix.parkourbeat.ui.HudSettings.banner(this.player);
+        Component points = null;
+        String mini = null;
         if (result == JumpResult.MISS) {
-            if (this.displayTimecode) {
-                points = PbText.of("&7MISS | &c-1HP");
-            } else {
-                points = PbText.of("&7MISS");
+            if (mode == ru.sortix.parkourbeat.ui.HudSettings.Points.CLASSIC) {
+                points = this.displayTimecode ? rate.append(PbText.of(" &c-1HP")) : rate;
+            } else if (mode == ru.sortix.parkourbeat.ui.HudSettings.Points.MINI) {
+                mini = "&8" + ru.sortix.parkourbeat.ui.SmallCaps.convert("miss") + (this.displayTimecode ? " &c-1HP" : "");
+                ru.sortix.parkourbeat.ui.ActionBarFade.show(this.player, result, false, mini);
             }
         } else {
-            points = PbText.of(result.formatPoints());
+            if (mode == ru.sortix.parkourbeat.ui.HudSettings.Points.CLASSIC) {
+                points = PbText.of(result.formatPoints());
+            } else if (mode == ru.sortix.parkourbeat.ui.HudSettings.Points.MINI) {
+                mini = ru.sortix.parkourbeat.ui.SmallCaps.convertTemplate(result.formatPoints());
+            }
+            ru.sortix.parkourbeat.ui.ActionBarFade.show(this.player, result, banner, mini);
         }
 
-        this.player.showTitle(Title.title(
-            Component.empty(),
-            points,
-            Title.Times.of(Duration.ZERO, Duration.ofMillis(310), Duration.ofMillis(135))
-        ));
+        if (points != null) {
+            this.player.showTitle(Title.title(
+                Component.empty(),
+                points,
+                Title.Times.of(Duration.ZERO, Duration.ofMillis(310), Duration.ofMillis(135))
+            ));
+        }
 
         if (this.hasModifier(Modifier.PERFECT) && result != JumpResult.PERFECT) {
             this.failLevel(this.loseTitle(), null);
@@ -2126,7 +2160,8 @@ public class Game {
         }
 
         this.bossBar.color(barColor.getBarColor());
-        this.bossBar.name(name);
+        // Проценты - нашими цифрами капителями и без подложки: под ними и так тонкая полоса.
+        this.bossBar.name(ru.sortix.parkourbeat.ui.SmallCaps.apply(name));
         this.bossBar.progress(progress);
 
         if (this.technicalBossBar != null) {

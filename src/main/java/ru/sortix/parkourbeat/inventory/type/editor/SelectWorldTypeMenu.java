@@ -39,7 +39,10 @@ public class SelectWorldTypeMenu extends ParkourBeatInventory implements EditLev
     private @Nullable Integer pendingWidth = null;
 
     public SelectWorldTypeMenu(@NonNull ParkourBeat plugin, String lang, @NonNull EditActivity activity) {
-        super(plugin, 3, lang, line(Lang.raw(lang, "auto.select_world_type_menu.select_world_type_menu.1")));
+        super(plugin, 6, lang, ru.sortix.parkourbeat.ui.Glyphs.menuTitle(
+            (char) (0xE56A + ru.sortix.parkourbeat.ui.Glyphs.localeSet(lang)),
+            ru.sortix.parkourbeat.ui.Icons.Icon.GLOBE.component().append(Component.text(" "))
+                .append(line(Lang.raw(lang, "auto.select_world_type_menu.select_world_type_menu.1")))));
         this.activity = activity;
         this.level = activity.getLevel();
         this.redraw();
@@ -75,16 +78,21 @@ public class SelectWorldTypeMenu extends ParkourBeatInventory implements EditLev
     private void redraw() {
         World.Environment current = this.level.getLevelSettings().getWorldSettings().getEnvironment();
 
-        this.setEnvironmentItem(2, World.Environment.NORMAL, current);
-        this.setEnvironmentItem(5, World.Environment.NETHER, current);
-        this.setEnvironmentItem(8, World.Environment.THE_END, current);
+        // Раскладка как в меню создания уровня (фон menu_worldtype в РП):
+        //   МИР     [обычный][ад][край]
+        //   РАЗМЕР  [1 чанк][4 чанка]
+        //   [<-]
+        this.setEnvironmentItem(12, World.Environment.NORMAL, current);
+        this.setEnvironmentItem(13, World.Environment.NETHER, current);
+        this.setEnvironmentItem(14, World.Environment.THE_END, current);
 
-        this.setWidthItem();
+        this.setWidthItem(30, LevelWidthSwitcher.NARROW_CHUNKS);
+        this.setWidthItem(31, LevelWidthSwitcher.WIDE_CHUNKS);
 
         this.setItem(
-            3,
-            5,
-            ItemUtils.create(Material.REDSTONE_TORCH, meta -> meta.displayName(line("&6Назад в настройки"))),
+            45,
+            ItemUtils.modifyMeta(ru.sortix.parkourbeat.ui.Icons.Button.ARROW_LEFT.item(ru.sortix.parkourbeat.ui.Icons.ButtonState.NORMAL),
+                meta -> meta.displayName(line("&6Назад в настройки"))),
             event -> new EditorMainMenu(this.plugin, this.lang, this.activity).open(event.getPlayer()));
     }
 
@@ -92,52 +100,56 @@ public class SelectWorldTypeMenu extends ParkourBeatInventory implements EditLev
      * Ширина площадки. Стоит рядом со сменой мира, потому что действие такое же:
      * уровень ненадолго закрывается и открывается заново.
      */
-    private void setWidthItem() {
+    private void setWidthItem(int slot, int target) {
         int current = this.level.getLevelSettings().getGameSettings().getChunkWidth()
             >= LevelWidthSwitcher.WIDE_CHUNKS
             ? LevelWidthSwitcher.WIDE_CHUNKS : LevelWidthSwitcher.NARROW_CHUNKS;
-        int target = current == LevelWidthSwitcher.WIDE_CHUNKS
-            ? LevelWidthSwitcher.NARROW_CHUNKS : LevelWidthSwitcher.WIDE_CHUNKS;
-
+        boolean isCurrent = target == current;
         boolean isPending = this.pendingWidth != null && this.pendingWidth == target;
-
+        ru.sortix.parkourbeat.ui.Icons.Button button = target == LevelWidthSwitcher.WIDE_CHUNKS
+            ? ru.sortix.parkourbeat.ui.Icons.Button.SIZE_4 : ru.sortix.parkourbeat.ui.Icons.Button.SIZE_1;
         this.setItem(
-            3,
-            3,
-            ItemUtils.create(target == LevelWidthSwitcher.WIDE_CHUNKS
-                ? Material.QUARTZ_BLOCK : Material.STONE_BRICKS, meta -> {
+            slot,
+            ItemUtils.modifyMeta(button.item(isCurrent
+                ? ru.sortix.parkourbeat.ui.Icons.ButtonState.SELECTED : ru.sortix.parkourbeat.ui.Icons.ButtonState.NORMAL), meta -> {
                 meta.displayName(line((isPending ? Lang.raw(this.lang, "auto.select_world_type_menu.set_width_item.1") : "&6")
                     + Lang.raw(this.lang, "auto.select_world_type_menu.set_width_item.2") + LevelWidthSwitcher.getDisplayName(target)));
-
                 List<Component> lore = new ArrayList<>();
                 lore.add(Component.empty());
                 lore.add(line(Lang.raw(this.lang, "auto.select_world_type_menu.set_width_item.3") + LevelWidthSwitcher.getDisplayName(current)));
-                lore.add(Component.empty());
-
-                if (isPending) {
-                    lore.add(line(Lang.raw(this.lang, "auto.select_world_type_menu.set_width_item.4")));
-                    lore.add(line(Lang.raw(this.lang, "auto.select_world_type_menu.set_width_item.5")));
-                    lore.add(line(Lang.raw(this.lang, "auto.select_world_type_menu.set_width_item.6")));
-                } else if (target == LevelWidthSwitcher.WIDE_CHUNKS) {
-                    lore.add(line(Lang.raw(this.lang, "auto.select_world_type_menu.set_width_item.7")));
-                    lore.add(line(Lang.raw(this.lang, "auto.select_world_type_menu.set_width_item.8")));
-                    lore.add(line(Lang.raw(this.lang, "auto.select_world_type_menu.set_width_item.9")));
-                    lore.add(line(Lang.raw(this.lang, "auto.select_world_type_menu.set_width_item.10")));
-                } else {
-                    lore.add(line(Lang.raw(this.lang, "auto.select_world_type_menu.set_width_item.11")));
-                    lore.add(line(Lang.raw(this.lang, "auto.select_world_type_menu.set_width_item.12")));
-                    lore.add(line(Lang.raw(this.lang, "auto.select_world_type_menu.set_width_item.13")));
-                    lore.add(line(Lang.raw(this.lang, "auto.select_world_type_menu.set_width_item.14")));
+                if (!isCurrent) {
+                    lore.add(Component.empty());
+                    if (isPending) {
+                        lore.add(line(Lang.raw(this.lang, "auto.select_world_type_menu.set_width_item.4")));
+                        lore.add(line(Lang.raw(this.lang, "auto.select_world_type_menu.set_width_item.5")));
+                        lore.add(line(Lang.raw(this.lang, "auto.select_world_type_menu.set_width_item.6")));
+                    } else if (target == LevelWidthSwitcher.WIDE_CHUNKS) {
+                        lore.add(line(Lang.raw(this.lang, "auto.select_world_type_menu.set_width_item.7")));
+                        lore.add(line(Lang.raw(this.lang, "auto.select_world_type_menu.set_width_item.8")));
+                        lore.add(line(Lang.raw(this.lang, "auto.select_world_type_menu.set_width_item.9")));
+                        lore.add(line(Lang.raw(this.lang, "auto.select_world_type_menu.set_width_item.10")));
+                    } else {
+                        lore.add(line(Lang.raw(this.lang, "auto.select_world_type_menu.set_width_item.11")));
+                        lore.add(line(Lang.raw(this.lang, "auto.select_world_type_menu.set_width_item.12")));
+                        lore.add(line(Lang.raw(this.lang, "auto.select_world_type_menu.set_width_item.13")));
+                        lore.add(line(Lang.raw(this.lang, "auto.select_world_type_menu.set_width_item.14")));
+                    }
+                    lore.add(Component.empty());
+                    lore.add(line(Lang.raw(this.lang, "auto.select_world_type_menu.set_width_item.15")));
                 }
-
-                lore.add(Component.empty());
-                lore.add(line(Lang.raw(this.lang, "auto.select_world_type_menu.set_width_item.15")));
                 meta.lore(lore);
+                if (isPending) glint(meta);
             }),
             event -> {
+                if (isCurrent) {
+                    Player player = event.getPlayer();
+                    ru.sortix.parkourbeat.ui.UiSounds.deny(player);
+                    return;
+                }
                 if (!isPending) {
                     this.pendingWidth = target;
                     this.pending = null;
+                    ru.sortix.parkourbeat.ui.UiSounds.toggle(event.getPlayer());
                     this.redraw();
                     return;
                 }
@@ -147,17 +159,30 @@ public class SelectWorldTypeMenu extends ParkourBeatInventory implements EditLev
             });
     }
 
-    private void setEnvironmentItem(int column,
+    /** Мерцание «ждёт подтверждения» (блеск без строчки зачарования). */
+    private static void glint(@NonNull org.bukkit.inventory.meta.ItemMeta meta) {
+        try {
+            meta.addEnchant(org.bukkit.enchantments.Enchantment.DURABILITY, 1, true);
+            meta.addItemFlags(ItemFlag.HIDE_ENCHANTS, ItemFlag.HIDE_ATTRIBUTES);
+        } catch (Exception ignored) {
+        }
+    }
+
+    private void setEnvironmentItem(int slot,
                                     @NonNull World.Environment environment,
                                     @NonNull World.Environment current
     ) {
         boolean isCurrent = environment == current;
         boolean isPending = this.pending == environment;
 
+        ru.sortix.parkourbeat.ui.Icons.Button button = environment == World.Environment.NETHER
+            ? ru.sortix.parkourbeat.ui.Icons.Button.WORLD_NETHER
+            : environment == World.Environment.THE_END
+            ? ru.sortix.parkourbeat.ui.Icons.Button.WORLD_END : ru.sortix.parkourbeat.ui.Icons.Button.WORLD_NORMAL;
         this.setItem(
-            2,
-            column,
-            ItemUtils.create(getIcon(environment), meta -> {
+            slot,
+            ItemUtils.modifyMeta(button.item(isCurrent
+                ? ru.sortix.parkourbeat.ui.Icons.ButtonState.SELECTED : ru.sortix.parkourbeat.ui.Icons.ButtonState.NORMAL), meta -> {
                 meta.displayName(line((isPending ? Lang.raw(this.lang, "auto.select_world_type_menu.set_environment_item.1") : "&6")
                     + WorldTypeSwitcher.getDisplayName(environment)));
 
@@ -186,13 +211,7 @@ public class SelectWorldTypeMenu extends ParkourBeatInventory implements EditLev
 
                 meta.lore(lore);
 
-                if (isCurrent || isPending) {
-                    try {
-                        meta.addEnchant(org.bukkit.enchantments.Enchantment.DURABILITY, 1, true);
-                        meta.addItemFlags(ItemFlag.HIDE_ENCHANTS, ItemFlag.HIDE_ATTRIBUTES);
-                    } catch (Exception ignored) {
-                    }
-                }
+                if (isPending) glint(meta);
             }),
             isCurrent ? this::alreadyCurrent : event -> this.select(event, environment));
     }
@@ -200,7 +219,7 @@ public class SelectWorldTypeMenu extends ParkourBeatInventory implements EditLev
     private void alreadyCurrent(@NonNull ClickEvent event) {
         Player player = event.getPlayer();
         player.sendMessage(line(Lang.raw(PlayerLang.of(player), "auto.select_world_type_menu.already_current.1")));
-        player.playSound(player.getLocation(), Sound.BLOCK_NOTE_BLOCK_BASS, 1f, 0.7f);
+        ru.sortix.parkourbeat.ui.UiSounds.deny(player);
     }
 
     private void select(@NonNull ClickEvent event, @NonNull World.Environment environment) {
@@ -209,7 +228,7 @@ public class SelectWorldTypeMenu extends ParkourBeatInventory implements EditLev
         if (this.pending != environment) {
             this.pending = environment;
             this.redraw();
-            player.playSound(player.getLocation(), Sound.BLOCK_NOTE_BLOCK_PLING, 1f, 0.6f);
+            ru.sortix.parkourbeat.ui.UiSounds.toggle(player);
             player.sendMessage(line(Lang.raw(PlayerLang.of(player), "auto.select_world_type_menu.select.1")
                 + WorldTypeSwitcher.getDisplayName(environment)));
             return;

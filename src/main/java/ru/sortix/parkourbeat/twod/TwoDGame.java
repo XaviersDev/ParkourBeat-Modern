@@ -95,6 +95,15 @@ public class TwoDGame {
     private Mode mode = Mode.CUBE;
     @Getter
     private int attempt = 1;
+    /**
+     * «Попытка №N» как в Geometry Dash: надпись стоит в мире у старта уровня (TextDisplay
+     * через ViaVersion, видна сквозь стены), камера проезжает мимо. Вместо титла.
+     */
+    private @javax.annotation.Nullable ru.sortix.parkourbeat.ui.PacketHologram attemptText;
+    /** Насколько надпись впереди старта и выше него, в блоках. */
+    public static double ATTEMPT_TEXT_AHEAD = 4.0D;
+    public static double ATTEMPT_TEXT_UP = 2.4D;
+    public static float ATTEMPT_TEXT_SCALE = 2.6F;
     @Getter
     private boolean active = false;
 
@@ -340,6 +349,7 @@ public class TwoDGame {
         this.player.addPotionEffect(new PotionEffect(
             PotionEffectType.INVISIBILITY, 1_000_000, 0, false, false, false));
         this.applySlowness();
+        this.showAttemptText();
 
         if (this.editorTest) {
             // В тесте у строителя не должно остаться ничего, кроме выхода из теста.
@@ -441,7 +451,7 @@ public class TwoDGame {
         Location cubeLocation = this.position.toLocation(this.world);
 
         this.cubeSeat = this.spawnSeat(cubeLocation);
-        this.cube = TwoDCubeEntity.spawn(this.world, cubeLocation, this.cubeBlockData());
+        this.cube = TwoDCubeEntity.spawn(this.world, cubeLocation, this.cubeBlockData(), this.player);
         this.cube.getEntity().setInvulnerable(true);
         this.cube.getEntity().setSilent(true);
         this.cube.getEntity().addScoreboardTag(TwoDManager.ENTITY_TAG);
@@ -521,6 +531,11 @@ public class TwoDGame {
     }
 
     private void removeBoat() {
+        // Пакетный кубик летает в пакетной лодке (у клиента) - снимаем её.
+        if (this.cube != null && this.cube.isFlying()) {
+            this.cube.stopFlight();
+            this.offsetsDirty = true;
+        }
         if (this.boat == null) return;
         try {
             if (this.cube != null && !this.cube.isStandalone() && this.cube.isValid()
@@ -552,6 +567,25 @@ public class TwoDGame {
     private void spawnBoat() {
         if (this.boat != null) return;
         if (this.cube == null) return;
+
+        // Пакетный кубик (BlockDisplay через ViaVersion): лодка тоже только у клиента,
+        // кубик сидит в ней пассажиром - двигаются как одно целое, без «плавания».
+        if (this.cube.isPacket()) {
+            if (this.cube.isFlying()) return;
+            double y = this.position.getY();
+            // Дно лодки - ровно на высоте низа кубика из физики: на земле она стоит НА
+            // блоках, а не проваливается в них (иначе клиент берёт свет из блока под
+            // полом, и лодка темнеет). Кубик рисуется на дне лодки - чуть выше физики.
+            double cubeY = this.cube.toEntityY(y) + TwoDTuning.CUBE_Y_OFFSET;
+            double boatY = y + TwoDTuning.CUBE_Y_OFFSET;
+            // Лодка по ходу уровня - камера видит её сбоку, как в Geometry Dash.
+            float boatYaw = TwoDEntityUtils.yawOf(this.forward);
+            float drop = (float) (cubeY - boatY);
+            float offset = (float) (drop + ru.sortix.parkourbeat.ui.PacketBoat.SEAT_HEIGHT);
+            if (this.cube.startFlight(this.player, this.position.getX(), boatY, this.position.getZ(), boatYaw, drop, offset)) {
+                return;
+            }
+        }
 
         EntityType type = TwoDGeometry.flightVehicleType();
         if (type == null) return;
@@ -679,7 +713,7 @@ public class TwoDGame {
 
             Location cubeLocation = this.position.toLocation(this.world);
             this.cubeSeat = this.spawnSeat(cubeLocation);
-            this.cube = TwoDCubeEntity.spawn(this.world, cubeLocation, this.cubeBlockData());
+            this.cube = TwoDCubeEntity.spawn(this.world, cubeLocation, this.cubeBlockData(), this.player);
             this.cube.getEntity().setInvulnerable(true);
             this.cube.getEntity().setSilent(true);
             this.cube.getEntity().addScoreboardTag(TwoDManager.ENTITY_TAG);
@@ -856,10 +890,13 @@ public class TwoDGame {
     private void tickCubeRotation() {
         if (this.cube == null || !this.cube.canRotate()) return;
         if (this.mode == Mode.FLY) {
-            // Кораблик не кувыркается, он наклоняется по вертикальной скорости.
-            double tilt = Math.max(-0.6D, Math.min(0.6D, this.verticalSpeed * 1.4D));
-            this.cubeAngle = tilt;
-            this.cube.applyRotation(this.cubeAngle, this.side, 2);
+            // В корабле кубик сидит ровно: ни кувырков, ни наклона. Один раз выпрямляем
+            // и больше не трогаем, пока не кончится полёт.
+            if (Math.abs(this.cubeAngle) > 1.0E-4D || Math.abs(this.cubeTargetAngle) > 1.0E-4D) {
+                this.cubeAngle = 0.0D;
+                this.cubeTargetAngle = 0.0D;
+                this.cube.applyRotation(0.0D, this.side, 2);
+            }
             return;
         }
 
@@ -1333,7 +1370,7 @@ public class TwoDGame {
         } catch (Throwable ignored) {
         }
 
-        if (this.boat != null) {
+        if (this.boat != null || (this.cube != null && this.cube.isFlying())) {
             try {
                 Location at = this.position.toLocation(this.world);
                 this.player.playSound(at, Sound.ENTITY_ITEM_BREAK, 1.0f, 0.7f);
@@ -1412,7 +1449,7 @@ public class TwoDGame {
         if (this.cube != null) return;
         try {
             Location at = this.position.toLocation(this.world);
-            this.cube = TwoDCubeEntity.spawn(this.world, at, this.cubeBlockData());
+            this.cube = TwoDCubeEntity.spawn(this.world, at, this.cubeBlockData(), this.player);
             this.cube.getEntity().setInvulnerable(true);
             this.cube.getEntity().setSilent(true);
             this.cube.getEntity().addScoreboardTag(TwoDManager.ENTITY_TAG);
@@ -1438,9 +1475,44 @@ public class TwoDGame {
         this.restartMusic();
         this.returnToStart();
 
-        this.player.showTitle(Title.title(Component.empty(),
-            Lang.text(this.player, "twod.title.attempt",
-                "%attempt%", String.valueOf(this.attempt)), ATTEMPT_TIMES));
+        // В мире у старта, как в Geometry Dash. Титл - только если надпись показать нельзя.
+        if (!this.showAttemptText()) {
+            this.player.showTitle(Title.title(Component.empty(),
+                Lang.text(this.player, "twod.title.attempt",
+                    "%attempt%", String.valueOf(this.attempt)), ATTEMPT_TIMES));
+        }
+    }
+
+    /** Поставить/обновить надпись «Попытка №N» у старта. false - показать нельзя. */
+    private boolean showAttemptText() {
+        try {
+            Component text = Lang.text(this.player, "twod.title.attempt", "%attempt%", String.valueOf(this.attempt));
+            if (this.attemptText != null) {
+                this.attemptText.setText(text);
+                return true;
+            }
+            if (!ru.sortix.parkourbeat.ui.PacketHologram.canShowTo(this.player)) return false;
+            Location at = this.cubeSpawn.clone()
+                .add(this.forward.getX() * ATTEMPT_TEXT_AHEAD, ATTEMPT_TEXT_UP, this.forward.getZ() * ATTEMPT_TEXT_AHEAD);
+            ru.sortix.parkourbeat.ui.PacketHologram hologram = new ru.sortix.parkourbeat.ui.PacketHologram(
+                at, text, ATTEMPT_TEXT_SCALE, 0x00000000)
+                .style(ru.sortix.parkourbeat.ui.PacketHologram.BILLBOARD_CENTER, 0)
+                .seeThrough(true);
+            hologram.show(this.player);
+            this.attemptText = hologram;
+            return true;
+        } catch (Throwable t) {
+            return false;
+        }
+    }
+
+    private void hideAttemptText() {
+        if (this.attemptText == null) return;
+        try {
+            this.attemptText.hide(this.player);
+        } catch (Throwable ignored) {
+        }
+        this.attemptText = null;
     }
 
     /**
@@ -1533,6 +1605,11 @@ public class TwoDGame {
         if (this.cube.isStandalone()) {
             TwoDEntityUtils.moveRaw(this.cube.getEntity(),
                 this.position.getX(), targetCubeY, this.position.getZ(), yaw, 0f);
+            // Пакетный BlockDisplay (наш 1.16.5) едет за ним, плавность - на клиенте.
+            // В полёте он сидит в пакетной лодке - двигаем лодку.
+            this.cube.moved(this.position.getX(), targetCubeY, this.position.getZ());
+            this.cube.moveFlight(this.position.getX(), this.position.getY() + TwoDTuning.BOAT_Y_OFFSET,
+                this.position.getZ(), yaw);
         } else {
             // Двигаем носителя, кубик приезжает пассажиром. Из-за этого его высота
             // отличается от высоты носителя на смещение посадки - его и вычитаем.
@@ -2097,6 +2174,7 @@ public class TwoDGame {
     public void stop(boolean teleportBack) {
         if (!this.active) return;
         this.active = false;
+        this.hideAttemptText();
 
         this.stopMusic();
         this.removeBossBar();

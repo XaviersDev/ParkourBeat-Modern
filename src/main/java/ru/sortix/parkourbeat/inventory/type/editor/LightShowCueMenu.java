@@ -31,7 +31,7 @@ public class LightShowCueMenu extends ParkourBeatInventory implements EditLevelM
                             @NonNull EditActivity activity,
                             @NonNull LightShowCue cue
     ) {
-        super(plugin, 5, lang, LangOptions.inventory_editorcue_title.getComponent(lang));
+        super(plugin, 5, lang, ru.sortix.parkourbeat.ui.Glyphs.menuTitle((char) (0xE948 + ru.sortix.parkourbeat.ui.Glyphs.localeSet(lang)), ru.sortix.parkourbeat.ui.Icons.Icon.PENCIL.component().append(net.kyori.adventure.text.Component.text(" ")).append(LangOptions.inventory_editorcue_title.getComponent(lang))));
         this.activity = activity;
         this.level = activity.getLevel();
         this.cue = cue;

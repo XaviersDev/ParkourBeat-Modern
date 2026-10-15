@@ -38,7 +38,7 @@ public class WonderFontsMenu extends ParkourBeatInventory implements EditLevelMe
 
     public WonderFontsMenu(@NonNull ParkourBeat plugin, String lang,
                            @NonNull EditActivity activity, @NonNull WonderEffect effect) {
-        super(plugin, 6, lang, PbText.of(Lang.raw(lang, "auto.wonder_fonts_menu.wonder_fonts_menu.1")));
+        super(plugin, 6, lang, ru.sortix.parkourbeat.ui.Glyphs.menuTitle((char) (0xE99C + ru.sortix.parkourbeat.ui.Glyphs.localeSet(lang)), ru.sortix.parkourbeat.ui.Icons.Icon.PENCIL.component().append(net.kyori.adventure.text.Component.text(" ")).append(PbText.of(Lang.raw(lang, "auto.wonder_fonts_menu.wonder_fonts_menu.1")))));
         this.activity = activity;
         this.effect = effect;
         this.updateItems();

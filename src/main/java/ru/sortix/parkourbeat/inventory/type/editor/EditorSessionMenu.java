@@ -14,7 +14,7 @@ import ru.sortix.parkourbeat.utils.lang.LangOptions;
 
 public class EditorSessionMenu extends ParkourBeatInventory {
     public EditorSessionMenu(@NonNull ParkourBeat plugin, String lang, @NonNull EditActivity activity) {
-        super(plugin, 3, lang, LangOptions.inventory_edit_session_title.getComponent(lang));
+        super(plugin, 3, lang, ru.sortix.parkourbeat.ui.Glyphs.menuTitle((char) (0xE924 + ru.sortix.parkourbeat.ui.Glyphs.localeSet(lang)), ru.sortix.parkourbeat.ui.Icons.Icon.PENCIL.component().append(net.kyori.adventure.text.Component.text(" ")).append(LangOptions.inventory_edit_session_title.getComponent(lang))));
 
         this.setItem(2, 4, ItemUtils.create(Material.COMPARATOR, meta -> {
             meta.displayName(LangOptions.inventory_edit_session_params_name.getComponent(lang));

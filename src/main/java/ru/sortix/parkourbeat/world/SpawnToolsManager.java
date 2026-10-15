@@ -34,6 +34,7 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.entity.EntityChangeBlockEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
+import org.bukkit.event.player.PlayerChangedWorldEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.scheduler.BukkitTask;
 import org.bukkit.util.Vector;
@@ -155,6 +156,8 @@ public class SpawnToolsManager implements PluginManager, Listener {
         public transient ArmorStand holoName;
         public transient ArmorStand holoDiff;
         public transient Set<UUID> viewers = ConcurrentHashMap.newKeySet();
+        /** Большая голограмма (TextDisplay через ViaVersion) - вместо двух стоек с именами. */
+        public transient ru.sortix.parkourbeat.ui.PacketHologram hologram;
 
         public LobbyNpc() {
             this.entityId = ThreadLocalRandom.current().nextInt(2000000, 9000000);
@@ -167,29 +170,77 @@ public class SpawnToolsManager implements PluginManager, Listener {
 
             for (UUID viewerId : viewers) {
                 Player player = Bukkit.getPlayer(viewerId);
-                if (player != null) sendHidePackets(player);
+                if (player != null) {
+                    sendHidePackets(player);
+                    if (hologram != null) hologram.hide(player);
+                }
             }
+            hologram = null;
             viewers.clear();
         }
 
         public void spawnBukkitEntities(GameSettings gs) {
             if (location == null || location.getWorld() == null) return;
 
-            holoName = location.getWorld().spawn(location.clone().add(0, 2.25, 0), ArmorStand.class, as -> {
+            // Есть ViaVersion - крупная голограмма пакетами, стойки с именами не нужны.
+            if (USE_TEXT_DISPLAY && ru.sortix.parkourbeat.ui.PacketHologram.isAvailable()) {
+                hologram = new ru.sortix.parkourbeat.ui.PacketHologram(location.clone().add(0, 2.45, 0),
+                    hologramText(gs), 1.25F, 0x70140620);
+                return;
+            }
+
+            holoName = location.getWorld().spawn(location.clone().add(0, 2.35, 0), ArmorStand.class, as -> {
                 as.setInvisible(true);
                 as.setMarker(true);
                 as.setCustomNameVisible(true);
-                as.customName(gs.getDisplayName().colorIfAbsent(NamedTextColor.WHITE));
+                as.customName(nameLine(gs));
                 as.addScoreboardTag(NPC_TAG);
             });
 
-            holoDiff = location.getWorld().spawn(location.clone().add(0, 1.95, 0), ArmorStand.class, as -> {
+            holoDiff = location.getWorld().spawn(location.clone().add(0, 2.05, 0), ArmorStand.class, as -> {
                 as.setInvisible(true);
                 as.setMarker(true);
                 as.setCustomNameVisible(true);
-                as.customName(PbText.of("Сложность: " + gs.getDifficulty().getDisplayName()));
+                as.customName(infoLine(gs));
                 as.addScoreboardTag(NPC_TAG);
             });
+        }
+
+        /** Верхняя строка: кубик сложности + название уровня. */
+        static net.kyori.adventure.text.Component nameLine(GameSettings gs) {
+            return ru.sortix.parkourbeat.ui.Glyphs.glyph(ru.sortix.parkourbeat.ui.Glyphs.cubeSmall(gs.getDifficulty()))
+                .append(net.kyori.adventure.text.Component.text(" "))
+                .append(gs.getDisplayName().colorIfAbsent(NamedTextColor.WHITE));
+        }
+
+        /** Нижняя строка: плашка сложности, звёзды и сколько человек прошло. */
+        static net.kyori.adventure.text.Component infoLine(GameSettings gs) {
+            int players = 0;
+            try {
+                players = ParkourBeat.getPlugin(ParkourBeat.class)
+                    .get(ru.sortix.parkourbeat.rating.StatisticsManager.class).getLevelTopSize(gs.getUniqueId());
+            } catch (Throwable ignored) {
+            }
+            return ru.sortix.parkourbeat.ui.Glyphs.glyph(ru.sortix.parkourbeat.ui.Glyphs.banner(gs.getDifficulty(), "en_us")
+                    + "  " + ru.sortix.parkourbeat.ui.Glyphs.stars(gs.getAverageStars()) + "  "
+                    + ru.sortix.parkourbeat.ui.Icons.Icon.USER.ch() + " ")
+                .append(net.kyori.adventure.text.Component.text(
+                    ru.sortix.parkourbeat.ui.SmallCaps.convert(String.valueOf(players)), NamedTextColor.GRAY));
+        }
+
+        /** Текст большой голограммы: название крупно, ниже плашка сложности, звёзды и игроки. */
+        static net.kyori.adventure.text.Component hologramText(GameSettings gs) {
+            return nameLine(gs).append(net.kyori.adventure.text.Component.newline()).append(infoLine(gs));
+        }
+
+        /** Обновить тексты голограмм (оценки и число игроков меняются со временем). */
+        public void refreshHolograms(GameSettings gs) {
+            if (hologram != null) hologram.setText(hologramText(gs));
+            try {
+                if (holoName != null && holoName.isValid()) holoName.customName(nameLine(gs));
+                if (holoDiff != null && holoDiff.isValid()) holoDiff.customName(infoLine(gs));
+            } catch (Throwable ignored) {
+            }
         }
 
         public void sendShowPackets(Player viewer, GameSettings gs) {
@@ -230,9 +281,13 @@ public class SpawnToolsManager implements PluginManager, Listener {
                 PacketContainer equip = pm.createPacket(PacketType.Play.Server.ENTITY_EQUIPMENT);
                 equip.getIntegers().write(0, entityId);
                 List<com.comphenix.protocol.wrappers.Pair<EnumWrappers.ItemSlot, ItemStack>> equipment = new ArrayList<>();
-                equipment.add(new com.comphenix.protocol.wrappers.Pair<>(EnumWrappers.ItemSlot.HEAD, UIHeads.PLAY));
+                // На голове - объёмный кубик сложности уровня (модель из РП), скин игрока остаётся.
+                equipment.add(new com.comphenix.protocol.wrappers.Pair<>(EnumWrappers.ItemSlot.HEAD,
+                    ru.sortix.parkourbeat.ui.Icons.helmet(gs.getDifficulty())));
                 equip.getSlotStackPairLists().write(0, equipment);
                 pm.sendServerPacket(viewer, equip);
+
+                if (hologram != null) hologram.show(viewer);
 
                 // Прячем из таба через 10 тиков
                 ParkourBeat.getPlugin(ParkourBeat.class).getServer().getScheduler().runTaskLaterAsynchronously(ParkourBeat.getPlugin(ParkourBeat.class), () -> {
@@ -262,6 +317,7 @@ public class SpawnToolsManager implements PluginManager, Listener {
                     destroy.getIntegerArrays().write(0, new int[]{entityId});
                 }
                 pm.sendServerPacket(viewer, destroy);
+                if (hologram != null) hologram.hide(viewer);
             } catch (Throwable ignored) {}
         }
     }
@@ -676,18 +732,37 @@ public class SpawnToolsManager implements PluginManager, Listener {
         }
     }
 
+    /** Когда игрок последний раз сменил мир: NPC показываем не сразу, а когда клиент догрузит мир. */
+    private final Map<UUID, Long> worldChangedAt = new ConcurrentHashMap<>();
+    private static final long NPC_SHOW_DELAY_MS = 750L;
+
     private void tickNpcs() {
-        if (tickCounter % 20 != 0) return; // Раз в секунду
+        if (tickCounter % 10 != 0) return; // Два раза в секунду
 
         Location lobbySpawn = Settings.getLobbySpawn();
         if (lobbySpawn == null || lobbySpawn.getWorld() == null) return;
 
+        // ВАЖНО: при смене мира клиент сам удаляет все сущности. Если игрок ушёл на уровень
+        // и не был вычеркнут из viewers, по возвращении NPC считал бы себя показанным и
+        // не слал пакеты - отсюда «половина NPC не прогрузилась». Сверяем каждый тик.
+        Set<UUID> inLobby = new java.util.HashSet<>();
+        for (Player player : lobbySpawn.getWorld().getPlayers()) inLobby.add(player.getUniqueId());
+        long now = System.currentTimeMillis();
+        boolean refresh = tickCounter % 200 == 0;
+
         for (LobbyNpc npc : npcs.values()) {
+            for (UUID id : npc.viewers) {
+                if (!inLobby.contains(id) && npc.hologram != null) npc.hologram.forget(id);
+            }
+            npc.viewers.removeIf(id -> !inLobby.contains(id));
             if (npc.location == null || npc.location.getWorld() == null) continue;
             GameSettings gs = plugin.get(LevelsManager.class).findLevel(npc.levelId);
             if (gs == null) continue;
+            if (refresh) npc.refreshHolograms(gs);
 
             for (Player player : lobbySpawn.getWorld().getPlayers()) {
+                Long changed = this.worldChangedAt.get(player.getUniqueId());
+                if (changed != null && now - changed < NPC_SHOW_DELAY_MS) continue;
                 if (player.getLocation().distanceSquared(npc.location) < 3600) { // 60 блоков
                     if (npc.viewers.add(player.getUniqueId())) {
                         npc.sendShowPackets(player, gs);
@@ -1107,9 +1182,24 @@ public class SpawnToolsManager implements PluginManager, Listener {
         if (event.getEntity().getScoreboardTags().contains(RIDE_TAG)) event.setCancelled(true);
     }
 
+    /** Смена мира: клиент уже стёр всех NPC - вычёркиваем игрока, чтобы показать их заново. */
+    @EventHandler
+    public void onChangedWorld(PlayerChangedWorldEvent event) {
+        UUID id = event.getPlayer().getUniqueId();
+        this.worldChangedAt.put(id, System.currentTimeMillis());
+        for (LobbyNpc npc : npcs.values()) {
+            npc.viewers.remove(id);
+            if (npc.hologram != null) npc.hologram.forget(id);
+        }
+    }
+
+    /** Голограммы NPC - большие TextDisplay (через ViaVersion). false - старые стойки с именами. */
+    public static boolean USE_TEXT_DISPLAY = true;
+
     @EventHandler
     public void onQuit(PlayerQuitEvent event) {
         UUID id = event.getPlayer().getUniqueId();
+        this.worldChangedAt.remove(id);
         launchedPlayers.remove(id);
         parkourSessions.remove(id);
         MoveSession session = movingPlayers.remove(id);

@@ -38,6 +38,13 @@ public class DiggerHologram {
     /** Кому видна панель. Всем остальным её пакеты не выпускаются вовсе. */
     private final @NonNull java.util.UUID owner;
     private final List<ArmorStand> lines = new ArrayList<>();
+    /**
+     * Строки на TextDisplay (через ViaVersion): всегда лицом к игроку, плавное перемещение
+     * за камерой (2 тика), видит только сам игрок. Если показать нельзя (старый клиент,
+     * нет ViaVersion) - остаются прежние стойки брони.
+     */
+    public static boolean USE_TEXT_DISPLAY = true;
+    private final List<ru.sortix.parkourbeat.ui.PacketHologram> displays = new ArrayList<>();
     private final List<String> texts = new ArrayList<>();
 
     /** Смещение панели относительно носителя: вперёд, вбок, вверх. */
@@ -67,6 +74,18 @@ public class DiggerHologram {
     /** Создать строки. Первая строка - верхняя, дальше вниз. */
     public void spawn(@NonNull Location anchor) {
         this.remove();
+        org.bukkit.entity.Player viewer = org.bukkit.Bukkit.getPlayer(this.owner);
+        if (USE_TEXT_DISPLAY && viewer != null && ru.sortix.parkourbeat.ui.PacketHologram.canShowTo(viewer)) {
+            for (int i = 0; i < this.texts.size(); i++) {
+                String text = this.texts.get(i);
+                ru.sortix.parkourbeat.ui.PacketHologram line = new ru.sortix.parkourbeat.ui.PacketHologram(
+                    this.lineLocation(anchor, i), text.isEmpty() ? net.kyori.adventure.text.Component.empty() : PbText.of(text),
+                    1.0F, 0x50140620).style(ru.sortix.parkourbeat.ui.PacketHologram.BILLBOARD_CENTER, 2);
+                line.show(viewer);
+                this.displays.add(line);
+            }
+            return;
+        }
         for (int i = 0; i < this.texts.size(); i++) {
             Location at = this.lineLocation(anchor, i);
             ArmorStand stand = (ArmorStand) this.world.spawnEntity(at, EntityType.ARMOR_STAND);
@@ -107,6 +126,10 @@ public class DiggerHologram {
         if (this.texts.get(index).equals(text)) return;
         this.texts.set(index, text);
 
+        if (index < this.displays.size()) {
+            this.displays.get(index).setText(text.isEmpty() ? net.kyori.adventure.text.Component.empty() : PbText.of(text));
+            return;
+        }
         if (index >= this.lines.size()) return;
         ArmorStand stand = this.lines.get(index);
         if (stand == null || stand.isDead()) return;
@@ -135,6 +158,17 @@ public class DiggerHologram {
         // панель дёргается, а числа на ней остаются теми же самыми, и глаз ловит именно
         // движение, а не мигание другого начертания.
         long now = System.currentTimeMillis();
+
+        // TextDisplay: тот же подскок, позиция уходит пакетом, клиент сглаживает её сам.
+        for (int i = 0; i < this.displays.size(); i++) {
+            Location at = this.lineLocation(anchor, i);
+            long since = now - this.linePunchTimes[i];
+            if (since >= 0L && since < PUNCH_MILLIS) {
+                double punch = DiggerTuning.HOLOGRAM_PUNCH_DISTANCE * Math.sin(Math.PI * since / (double) PUNCH_MILLIS);
+                at.add(this.punchDirection.getX() * punch, this.punchDirection.getY() * punch, this.punchDirection.getZ() * punch);
+            }
+            this.displays.get(i).teleport(at);
+        }
 
         for (int i = 0; i < this.lines.size(); i++) {
             ArmorStand stand = this.lines.get(i);
@@ -171,6 +205,12 @@ public class DiggerHologram {
     }
 
     public void remove() {
+        org.bukkit.entity.Player viewer = org.bukkit.Bukkit.getPlayer(this.owner);
+        for (ru.sortix.parkourbeat.ui.PacketHologram line : this.displays) {
+            if (viewer != null) line.hide(viewer);
+            else line.forget(this.owner);
+        }
+        this.displays.clear();
         for (ArmorStand stand : this.lines) {
             if (stand == null) continue;
             DiggerEntityHider.forget(stand.getEntityId());

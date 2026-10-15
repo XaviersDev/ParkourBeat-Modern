@@ -17,7 +17,7 @@ import java.util.Collection;
 
 public class BiomeZonesMenu extends LightShowElementsMenu<BiomeZone> {
     public BiomeZonesMenu(@NonNull ParkourBeat plugin, String lang, @NonNull EditActivity activity) {
-        super(plugin, lang, activity, LangOptions.inventory_editorbiomes_title.getComponent(lang));
+        super(plugin, lang, activity, ru.sortix.parkourbeat.ui.Glyphs.menuTitle((char) (0xE909 + ru.sortix.parkourbeat.ui.Glyphs.localeSet(lang)), ru.sortix.parkourbeat.ui.Icons.Icon.PENCIL.component().append(net.kyori.adventure.text.Component.text(" ")).append(LangOptions.inventory_editorbiomes_title.getComponent(lang))));
         this.updateAllItems();
     }
 

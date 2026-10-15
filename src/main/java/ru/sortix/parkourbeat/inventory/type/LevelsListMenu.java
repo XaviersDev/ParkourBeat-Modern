@@ -28,6 +28,7 @@ import ru.sortix.parkourbeat.utils.lang.Lang;
 import ru.sortix.parkourbeat.utils.lang.LangOptions;
 import ru.sortix.parkourbeat.utils.lang.LangOptions.Placeholders;
 import ru.sortix.parkourbeat.world.TeleportUtils;
+import ru.sortix.parkourbeat.ui.Icons;
 
 import java.text.SimpleDateFormat;
 import java.util.*;
@@ -44,6 +45,8 @@ public class LevelsListMenu extends PaginatedMenu<ParkourBeat, GameSettings> {
 
     /** Показывать только 2D-уровни. */
     private boolean onlyTwoD = false;
+    /** Какие уровни показывать: вкладки режимов сверху. По умолчанию - обычные 3D. */
+    private ru.sortix.parkourbeat.twod.LevelMode modeFilter = ru.sortix.parkourbeat.twod.LevelMode.THREE_D;
 
     /**
      * Показывать только дуэльные карты. Включается из {@code /duel}: там список нужен
@@ -53,6 +56,7 @@ public class LevelsListMenu extends PaginatedMenu<ParkourBeat, GameSettings> {
 
     public void setOnlyDuel(boolean onlyDuel) {
         this.onlyDuel = onlyDuel;
+        if (onlyDuel) this.modeFilter = ru.sortix.parkourbeat.twod.LevelMode.DUEL;
         this.updateAllItems();
     }
 
@@ -78,15 +82,35 @@ public class LevelsListMenu extends PaginatedMenu<ParkourBeat, GameSettings> {
         }
     }
 
+    /** Витрина 7x3 в центре окна (см. фон menu_levels в РП). */
     private static final int[] CONTENT_SLOTS = {
-        10, 11, 12, 13, 14, 15, 16,
-        19, 20, 21, 22, 23, 24, 25,
-        28, 29, 30, 31, 32, 33, 34,
-        37, 38, 39, 40, 41, 42, 43
+        9, 10, 11, 12, 13, 14, 15, 16, 17,
+        18, 19, 20, 21, 22, 23, 24, 25, 26,
+        27, 28, 29, 30, 31, 32, 33, 34, 35
     };
 
+    /** Фильтр по сложностям: пусто - показываются все. */
+    private final java.util.EnumSet<LevelDifficulty> difficultyFilter = java.util.EnumSet.noneOf(LevelDifficulty.class);
+
+    private static final LevelDifficulty[] FILTER_DIFFICULTIES = {LevelDifficulty.EASY, LevelDifficulty.NORMAL,
+        LevelDifficulty.HARD, LevelDifficulty.EXPERT, LevelDifficulty.EXPERT_PLUS};
+
+    @NonNull
+    private static net.kyori.adventure.text.Component title(String lang) {
+        return ru.sortix.parkourbeat.ui.Glyphs.menuTitle(ru.sortix.parkourbeat.ui.Glyphs.menuLevels(lang),
+            ru.sortix.parkourbeat.ui.Icons.Icon.SEARCH.component()
+                .append(net.kyori.adventure.text.Component.text(" "))
+                .append(LangOptions.inventory_levellist_title.getComponent(lang)));
+    }
+
+    @NonNull
+    private String t(@NonNull String ruText, @NonNull String enText, @NonNull String ukText) {
+        int set = ru.sortix.parkourbeat.ui.Glyphs.localeSet(this.lang);
+        return set == 1 ? enText : set == 2 ? ukText : ruText;
+    }
+
     public LevelsListMenu(@NonNull ParkourBeat plugin, String lang, @NonNull DisplayMode displayMode, @NonNull Player viewer, @NonNull UUID ownerId) {
-        super(plugin, 6, lang, LangOptions.inventory_levellist_title.getComponent(lang), CONTENT_SLOTS);
+        super(plugin, 6, lang, title(lang), CONTENT_SLOTS);
         this.displayMode = displayMode;
         this.viewer = viewer;
         this.ownerId = ownerId;
@@ -106,8 +130,12 @@ public class LevelsListMenu extends PaginatedMenu<ParkourBeat, GameSettings> {
 
         List<GameSettings> settings = new ArrayList<>(this.plugin.get(LevelsManager.class).getAvailableLevelsSettings());
         settings.removeIf(removeIf);
-        if (this.onlyTwoD) settings.removeIf(gs -> !gs.getLevelMode().isTwoD());
-        if (this.onlyDuel) settings.removeIf(gs -> !gs.getLevelMode().isDuel());
+        // Вкладка режима (3D / 2D / Копатель / Дуэль / 360). Мои уровни и модерация - все режимы.
+        if (this.displayMode == DisplayMode.RANKED || this.displayMode == DisplayMode.UNRANKED) {
+            ru.sortix.parkourbeat.twod.LevelMode wanted = this.modeFilter;
+            settings.removeIf(gs -> gs.getLevelMode() != wanted);
+        }
+        if (!this.difficultyFilter.isEmpty()) settings.removeIf(gs -> !this.difficultyFilter.contains(gs.getDifficulty()));
 
         settings.sort((a, b) -> {
             switch (this.sortMode) {
@@ -140,21 +168,33 @@ public class LevelsListMenu extends PaginatedMenu<ParkourBeat, GameSettings> {
 
     @Override
     protected @NonNull ItemStack createItemDisplay(@NonNull GameSettings gameSettings) {
-        return ItemUtils.modifyMeta(Heads.getHeadByTextureData(gameSettings.getDifficulty().getHeadBase64(), true), meta -> {
+        // КАРТОЧКА УРОВНЯ: кубик сложности, а в описании - автор, плашка сложности,
+        // тип, звёзды, сколько человек прошло и что делают кнопки мыши.
+        return ItemUtils.modifyMeta(gameSettings.getDifficulty().createIcon(), meta -> {
             String levelName = PbText.keepColors(net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer.legacyAmpersand().serialize(gameSettings.getDisplayName()));
             meta.displayName(LangOptions.inventory_levellist_item_name.getComponent(lang,
                 new Placeholders("%level%", levelName)
             ));
 
-            List<net.kyori.adventure.text.Component> lore = new ArrayList<>(LangOptions.inventory_levellist_item_lore.getComponents(lang,
-                new Placeholders("%id%", String.valueOf(gameSettings.getUniqueNumber())),
-                new Placeholders("%access%", gameSettings.isPublicVisible() ? "PUBLIC" : "PRIVATE"),
-                new Placeholders("%author%", gameSettings.getOwnerName()), // Только главный автор
-                new Placeholders("%stars%", String.valueOf(gameSettings.getPlayerRatings().size())),
-                new Placeholders("%difficulty%", gameSettings.getDifficulty().getDisplayName()),
-                new Placeholders("%type%", typeValue(gameSettings)),
-                new Placeholders("%date%", new SimpleDateFormat("yyyy.MM.dd").format(new Date(gameSettings.getCreatedAtMills())))
-            ));
+            List<net.kyori.adventure.text.Component> lore = new ArrayList<>();
+            lore.add(PbText.item("&7" + ru.sortix.parkourbeat.ui.SmallCaps.convert(this.t("от ", "by ", "від "))
+                + "<v>&f" + gameSettings.getOwnerName() + "</v>"));
+            lore.add(ru.sortix.parkourbeat.ui.Glyphs.glyph(ru.sortix.parkourbeat.ui.Glyphs.banner(gameSettings.getDifficulty(), lang))
+                .append(PbText.item("  " + typeValue(gameSettings))));
+
+            int votes = gameSettings.getStarRatings().size();
+            int players = this.plugin.get(ru.sortix.parkourbeat.rating.StatisticsManager.class)
+                .getLevelTopSize(gameSettings.getUniqueId());
+            lore.add(ru.sortix.parkourbeat.ui.Glyphs.glyph(ru.sortix.parkourbeat.ui.Glyphs.stars(gameSettings.getAverageStars()))
+                .append(PbText.item(votes == 0
+                    ? " &8" + this.t("нет оценок", "no ratings", "немає оцінок")
+                    : " &7" + String.format(Locale.ROOT, "%.1f", gameSettings.getAverageStars()) + " &8(" + votes + ")")));
+            lore.add(PbText.item("<i:user> &7" + players + "   <i:clock> &7"
+                + new SimpleDateFormat("dd.MM.yyyy").format(new Date(gameSettings.getCreatedAtMills()))));
+            if (this.displayTechInfo) {
+                lore.add(PbText.item("&8#" + gameSettings.getUniqueNumber() + " \u00B7 "
+                    + (gameSettings.isPublicVisible() ? "PUBLIC" : "PRIVATE")));
+            }
 
             if (gameSettings.isCustomTextures()) {
                 lore.add(Lang.item(lang, "level.textures.custom"));
@@ -164,8 +204,14 @@ public class LevelsListMenu extends PaginatedMenu<ParkourBeat, GameSettings> {
                 }
             }
 
+            lore.add(net.kyori.adventure.text.Component.empty());
             if (this.displayMode == DisplayMode.SELF) {
                 lore.addAll(LangOptions.inventory_levellist_item_actions_self.getComponents(lang));
+            } else if (this.displayMode == DisplayMode.MODERATION) {
+                lore.add(PbText.item("<i:lmb> &7" + this.t("Модерация", "Moderate", "Модерація")));
+            } else {
+                lore.add(PbText.item("<i:lmb> &7" + this.t("Играть", "Play", "Грати")));
+                lore.add(PbText.item("<i:rmb> &7" + this.t("Подробнее", "Details", "Детальніше")));
             }
             meta.lore(lore);
         });
@@ -173,41 +219,63 @@ public class LevelsListMenu extends PaginatedMenu<ParkourBeat, GameSettings> {
 
     @Override
     protected void onPageDisplayed() {
-        // В режиме "только 2D" рамка жёлтая: видно с первого взгляда, что список отфильтрован.
-        Material glassMaterial = this.onlyTwoD
-            ? Material.YELLOW_STAINED_GLASS_PANE
-            : Material.BLACK_STAINED_GLASS_PANE;
-        ItemStack glass = ItemUtils.create(glassMaterial, m -> m.displayName(net.kyori.adventure.text.Component.empty()));
-        for (int i = 0; i < 54; i++) {
-            boolean isContent = false;
-            for (int slot : CONTENT_SLOTS) if (i == slot) { isContent = true; break; }
-            if (!isContent) this.setItem(i, glass, null);
+        // Раскладка под фон menu_levels (РП):
+        //   [X] .. [3D][2D][КОП][ДУЭЛЬ][360] .. [кнопка]
+        //   витрина 9x3
+        //   [+] ....... [<][стр][>]
+        //   [сортировка x4][сложность x5]
+        this.setItem(0, ItemUtils.modifyMeta(Icons.cancel(),
+            m -> m.displayName(LangOptions.inventory_regularitems_close.getComponent(lang))), e -> e.getPlayer().closeInventory());
+
+        int page = this.getCurrentPageNumber();
+        int pages = this.getMaxPageNumber();
+        this.setItem(4 * 9 + 3, ItemUtils.modifyMeta(Icons.Button.ARROW_LEFT.item(page > 1 ? Icons.ButtonState.NORMAL : Icons.ButtonState.DISABLED),
+                m -> m.displayName(PbText.item("<i:arrow_left> &f" + this.t("Назад", "Previous", "Назад")))),
+            page > 1 ? e -> {
+                ru.sortix.parkourbeat.ui.UiSounds.page(e.getPlayer());
+                this.showPage(page - 1);
+            } : null);
+        ItemStack pageItem = ItemUtils.modifyMeta(Icons.Button.PAGE.item(Icons.ButtonState.SELECTED), m -> {
+            m.displayName(PbText.item("<i:book> &f" + this.t("Страница ", "Page ", "Сторінка ") + page + " / " + pages));
+            m.lore(List.of(PbText.item("&7" + this.t("Уровней: ", "Levels: ", "Рівнів: ") + this.getTotalItemsCount())));
+        });
+        pageItem.setAmount(Math.max(1, Math.min(64, page)));
+        this.setItem(4 * 9 + 4, pageItem, null);
+        this.setItem(4 * 9 + 5, ItemUtils.modifyMeta(Icons.Button.ARROW_RIGHT.item(page < pages ? Icons.ButtonState.NORMAL : Icons.ButtonState.DISABLED),
+                m -> m.displayName(PbText.item("<i:arrow_right> &f" + this.t("Дальше", "Next", "Далі")))),
+            page < pages ? e -> {
+                ru.sortix.parkourbeat.ui.UiSounds.page(e.getPlayer());
+                this.showPage(page + 1);
+            } : null);
+
+        if (this.displayMode != DisplayMode.MODERATION) {
+            this.updateSortButton();
+            this.updateDifficultyFilter();
+        }
+        if (this.displayMode == DisplayMode.RANKED || this.displayMode == DisplayMode.UNRANKED) {
+            this.updateModeTabs();
         }
 
-        this.setPreviousPageItem(6, 4);
-        this.setItem(6, 5, ItemUtils.create(Material.BARRIER, m -> m.displayName(LangOptions.inventory_regularitems_close.getComponent(lang))), e -> e.getPlayer().closeInventory());
-        this.setNextPageItem(6, 6);
-
         if (this.displayMode == DisplayMode.RANKED || this.displayMode == DisplayMode.UNRANKED) {
-            this.updateSortButton();
-            this.updateTwoDFilterButton();
-            this.setItem(53, ItemUtils.create(Material.ENDER_PEARL, m -> m.displayName(
+            this.setItem(8, ItemUtils.modifyMeta(Icons.Button.PENCIL.item(Icons.ButtonState.NORMAL), m -> m.displayName(
                 LangOptions.inventory_edit_session_levels_name.getComponent(lang)
             )), e -> {
                 e.getPlayer().closeInventory();
                 e.getPlayer().performCommand("edit");
             });
+            this.setItem(4 * 9 + 8, ItemUtils.modifyMeta(Icons.Button.PLUS.item(Icons.ButtonState.NORMAL), m -> m.displayName(
+                LangOptions.inventory_levellist_displaymode_self_createlevel.getComponent(lang))),
+                e -> CreateLevelMenu.startCreating(plugin, viewer, lang));
         } else if (this.displayMode == DisplayMode.MODERATION) {
-            this.setItem(8, ItemUtils.create(Material.WRITTEN_BOOK, m -> {
+            this.setItem(8, ItemUtils.modifyMeta(Icons.Button.BOOK.item(Icons.ButtonState.NORMAL), m -> {
                 m.displayName(LangOptions.inventory_levellist_feedback_name.getComponent(lang));
                 m.lore(LangOptions.inventory_levellist_feedback_lore.getComponents(lang));
             }), e -> new RatingFeedbackMenu(plugin, lang).open(e.getPlayer()));
 
-            // Вкладка с заявками на сброс статистики.
             int resetRequests = this.plugin.get(
                 ru.sortix.parkourbeat.stats.StatResetRequestManager.class).getPendingCount();
-            this.setItem(7, ItemUtils.create(
-                resetRequests > 0 ? Material.REDSTONE_TORCH : Material.LEVER, m -> {
+            this.setItem(4 * 9 + 8, ItemUtils.modifyMeta(Icons.Button.WARN.item(
+                resetRequests > 0 ? Icons.ButtonState.SELECTED : Icons.ButtonState.NORMAL), m -> {
                     m.displayName(Lang.item(lang, resetRequests > 0
                             ? "inventory.levellist.statreset.name_pending"
                             : "inventory.levellist.statreset.name",
@@ -220,29 +288,83 @@ public class LevelsListMenu extends PaginatedMenu<ParkourBeat, GameSettings> {
                 e -> new ru.sortix.parkourbeat.inventory.type.moderation.StatResetRequestsMenu(
                     plugin, lang, e.getPlayer()).open(e.getPlayer()));
         } else if (this.displayMode == DisplayMode.SELF) {
-            // Свои уровни сортируются так же, как общий список: набор режимов один.
-            this.updateSortButton();
-            this.updateTwoDFilterButton();
-            this.setItem(45, ItemUtils.modifyMeta(UIHeads.ARROW_LEFT.clone(), m -> m.displayName(
+            this.setItem(8, ItemUtils.modifyMeta(Icons.Button.ARROW_LEFT.item(Icons.ButtonState.NORMAL), m -> m.displayName(
                 LangOptions.inventory_levellist_displaymode_self_backtoplay.getComponent(lang)
             )), e -> {
                 e.getPlayer().closeInventory();
                 e.getPlayer().performCommand("play");
             });
-            this.setItem(53, ItemUtils.create(Material.WRITABLE_BOOK, m -> m.displayName(LangOptions.inventory_levellist_displaymode_self_createlevel.getComponent(lang))), e -> CreateLevelMenu.startCreating(plugin, viewer, lang));
+            this.setItem(4 * 9 + 8, ItemUtils.modifyMeta(Icons.Button.PLUS.item(Icons.ButtonState.NORMAL),
+                m -> m.displayName(LangOptions.inventory_levellist_displaymode_self_createlevel.getComponent(lang))),
+                e -> CreateLevelMenu.startCreating(plugin, viewer, lang));
         }
     }
 
-    private void updateSortButton() {
-        String sortName = this.sortMode.getDisplayName(this.lang);
+    /** Вкладки режимов: 3D (по умолчанию), 2D, Копатель, Дуэль, 360. */
+    private void updateModeTabs() {
+        ru.sortix.parkourbeat.twod.LevelMode[] modes = {
+            ru.sortix.parkourbeat.twod.LevelMode.THREE_D, ru.sortix.parkourbeat.twod.LevelMode.TWO_D,
+            ru.sortix.parkourbeat.twod.LevelMode.DIGGER, ru.sortix.parkourbeat.twod.LevelMode.DUEL,
+            ru.sortix.parkourbeat.twod.LevelMode.THREE_SIXTY};
+        Icons.Button[] icons = {Icons.Button.MODE_3D, Icons.Button.MODE_2D, Icons.Button.MODE_DIGGER,
+            Icons.Button.MODE_DUEL, Icons.Button.MODE_360};
+        for (int i = 0; i < modes.length; i++) {
+            ru.sortix.parkourbeat.twod.LevelMode mode = modes[i];
+            boolean on = mode == this.modeFilter;
+            this.setItem(2 + i, ItemUtils.modifyMeta(icons[i].item(on ? Icons.ButtonState.SELECTED : Icons.ButtonState.NORMAL), m -> {
+                m.displayName(PbText.item((on ? "<i:check> " : "") + "&f" + mode.getDisplayName().replaceAll("(?i)[&\u00A7][0-9a-fk-or]", "")));
+                m.lore(List.of(PbText.item(on
+                    ? "&a" + this.t("Показываются", "Shown", "Показуються")
+                    : "<i:lmb> &7" + this.t("Показать эти уровни", "Show these levels", "Показати ці рівні"))));
+            }), on ? null : e -> {
+                this.modeFilter = mode;
+                this.click(e.getPlayer());
+                this.updateAllItems();
+            });
+        }
+    }
 
-        this.setItem(0, ItemUtils.modifyMeta(UIHeads.SORT.clone(), m -> {
-            m.displayName(LangOptions.inventory_levellist_sort_name.getComponent(lang));
-            m.lore(LangOptions.inventory_levellist_sort_lore.getComponents(lang, new Placeholders("%sort%", sortName)));
-        }), e -> {
-            this.sortMode = this.sortMode.next();
-            this.updateAllItems();
-        });
+    /** Фильтр сложностей: нажатие включает/выключает; ничего не выбрано - видны все. */
+    private void updateDifficultyFilter() {
+        for (int i = 0; i < FILTER_DIFFICULTIES.length; i++) {
+            LevelDifficulty diff = FILTER_DIFFICULTIES[i];
+            boolean on = this.difficultyFilter.contains(diff);
+            this.setItem(5 * 9 + 4 + i, ItemUtils.modifyMeta(Icons.Button.difficulty(diff).item(
+                on ? Icons.ButtonState.SELECTED : Icons.ButtonState.NORMAL), m -> {
+                m.displayName(ru.sortix.parkourbeat.ui.Glyphs.glyph(ru.sortix.parkourbeat.ui.Glyphs.banner(diff, lang)));
+                m.lore(List.of(PbText.item(on
+                    ? "<i:check> &a" + this.t("Показываются", "Shown", "Показуються")
+                    : "<i:lmb> &7" + this.t("Показать только их", "Show only these", "Показати лише їх"))));
+            }), e -> {
+                if (!this.difficultyFilter.remove(diff)) this.difficultyFilter.add(diff);
+                this.click(e.getPlayer());
+                this.updateAllItems();
+            });
+        }
+    }
+
+    private void click(@NonNull Player player) {
+        ru.sortix.parkourbeat.ui.UiSounds.click(player);
+    }
+
+    private void updateSortButton() {
+        // Четыре вкладки вместо одного переключателя по кругу: видно все варианты сразу.
+        SortMode[] modes = SortMode.values();
+        Icons.Button[] icons = {Icons.Button.SORT_ASC, Icons.Button.SORT_DESC, Icons.Button.SORT_POPULAR, Icons.Button.SORT_NEW};
+        for (int i = 0; i < modes.length && i < icons.length; i++) {
+            SortMode mode = modes[i];
+            boolean on = mode == this.sortMode;
+            this.setItem(5 * 9 + i, ItemUtils.modifyMeta(icons[i].item(on ? Icons.ButtonState.SELECTED : Icons.ButtonState.NORMAL), m -> {
+                m.displayName(PbText.item((on ? "<i:check> " : "") + "&f" + mode.getDisplayName(this.lang)));
+                m.lore(List.of(PbText.item(on
+                    ? "&a" + this.t("Выбрано", "Selected", "Обрано")
+                    : "<i:lmb> &7" + this.t("Сортировать так", "Sort this way", "Сортувати так"))));
+            }), on ? null : e -> {
+                this.sortMode = mode;
+                this.click(e.getPlayer());
+                this.updateAllItems();
+            });
+        }
     }
 
     /**
@@ -252,19 +374,7 @@ public class LevelsListMenu extends PaginatedMenu<ParkourBeat, GameSettings> {
      * по предмету сразу видно, в каком состоянии список сейчас.
      */
     private void updateTwoDFilterButton() {
-        Material material = this.onlyTwoD ? Material.PURPUR_PILLAR : Material.REPEATING_COMMAND_BLOCK;
-
-        this.setItem(8, ItemUtils.create(material, m -> {
-            m.displayName(Lang.item(lang, this.onlyTwoD
-                ? "inventory.levellist.twod.name_on"
-                : "inventory.levellist.twod.name_off"));
-            m.lore(Lang.lore(lang, this.onlyTwoD
-                ? "inventory.levellist.twod.lore_on"
-                : "inventory.levellist.twod.lore_off"));
-        }), e -> {
-            this.onlyTwoD = !this.onlyTwoD;
-            this.updateAllItems();
-        });
+        // заменён вкладками режимов (updateModeTabs)
     }
 
     /**
@@ -293,7 +403,13 @@ public class LevelsListMenu extends PaginatedMenu<ParkourBeat, GameSettings> {
     protected void onClick(@NonNull ClickEvent event, @NonNull GameSettings settings) {
         Player player = event.getPlayer();
         if (this.displayMode == DisplayMode.RANKED || this.displayMode == DisplayMode.UNRANKED) {
-            new LevelDetailsMenu(plugin, lang, settings, player, this.displayMode).open(player);
+            // Как у HollowCube: ЛКМ - сразу играть, ПКМ (и Shift) - подробнее.
+            if (event.isLeft() && !event.isShift()) {
+                player.closeInventory();
+                startPlaying(plugin, player, settings);
+            } else {
+                new LevelDetailsMenu(plugin, lang, settings, player, this.displayMode).open(player);
+            }
         } else if (this.displayMode == DisplayMode.MODERATION) {
             new ModeratorConfirmationMenu(plugin, lang, settings, player).open(player);
         } else {
@@ -343,16 +459,30 @@ public class LevelsListMenu extends PaginatedMenu<ParkourBeat, GameSettings> {
             player.sendMessage(LangOptions.level_play_alreadyinworld.getComponent(lang));
             return;
         }
-        PlayActivity.createAsync(plugin, player, settings.getUniqueId(), false).thenAccept(playActivity -> {
-            if (playActivity == null) {
-                player.sendMessage(LangOptions.level_play_failload.getComponent(lang));
-                return;
-            }
-            plugin.get(ActivityManager.class).switchActivity(player, playActivity, playActivity.getLevel().getSpawn())
-                .thenAccept(success -> {
-                    if (!success) player.sendMessage(LangOptions.level_play_failteleport.getComponent(lang));
+        // Полноэкранный переход: экран закрывается кубиками (у каждой сложности свой
+        // рисунок), пока он закрыт - создаётся забег и идёт телепорт, потом открывается.
+        ru.sortix.parkourbeat.levels.LevelDifficulty difficulty = settings.getDifficulty();
+        ru.sortix.parkourbeat.ui.LevelTransition.play(plugin, player, difficulty,
+            ru.sortix.parkourbeat.ui.LevelTransition.subtitle(player, difficulty, settings.getDisplayName()),
+            () -> {
+                java.util.concurrent.CompletableFuture<Object> done = new java.util.concurrent.CompletableFuture<>();
+                PlayActivity.createAsync(plugin, player, settings.getUniqueId(), false).thenAccept(playActivity -> {
+                    if (playActivity == null) {
+                        player.sendMessage(LangOptions.level_play_failload.getComponent(lang));
+                        done.complete(null);
+                        return;
+                    }
+                    plugin.get(ActivityManager.class).switchActivity(player, playActivity, playActivity.getLevel().getSpawn())
+                        .thenAccept(success -> {
+                            if (!success) player.sendMessage(LangOptions.level_play_failteleport.getComponent(lang));
+                            done.complete(null);
+                        });
+                }).exceptionally(t -> {
+                    done.complete(null);
+                    return null;
                 });
-        });
+                return done;
+            });
     }
 
     public static void startSpectating(@NonNull ParkourBeat plugin, @NonNull Player player, @NonNull GameSettings settings) {

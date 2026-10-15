@@ -41,7 +41,7 @@ public class TwoDBannerColorMenu extends ParkourBeatInventory implements EditLev
 
     public TwoDBannerColorMenu(@NonNull ParkourBeat plugin, String lang,
                                @NonNull EditActivity activity, TwoDBanners.@NonNull Type type) {
-        super(plugin, 4, lang, PbText.of(type.title));
+        super(plugin, 4, lang, ru.sortix.parkourbeat.ui.Glyphs.menuTitle((char) (0xE981 + ru.sortix.parkourbeat.ui.Glyphs.localeSet(lang)), ru.sortix.parkourbeat.ui.Icons.Icon.PENCIL.component().append(net.kyori.adventure.text.Component.text(" ")).append(PbText.of(type.title))));
         this.activity = activity;
         this.type = type;
 

@@ -27,7 +27,7 @@ import java.util.List;
 public class PickaxeCuesMenu extends LightShowElementsMenu<PickaxeCue> {
 
     public PickaxeCuesMenu(@NonNull ParkourBeat plugin, String lang, @NonNull EditActivity activity) {
-        super(plugin, lang, activity, PbText.of("&8Кирки по таймкоду"));
+        super(plugin, lang, activity, ru.sortix.parkourbeat.ui.Glyphs.menuTitle((char) (0xE95D + ru.sortix.parkourbeat.ui.Glyphs.localeSet(lang)), ru.sortix.parkourbeat.ui.Icons.Icon.PENCIL.component().append(net.kyori.adventure.text.Component.text(" ")).append(PbText.of("&8Кирки по таймкоду"))));
         this.updateAllItems();
     }
 

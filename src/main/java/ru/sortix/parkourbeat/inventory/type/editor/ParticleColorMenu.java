@@ -24,7 +24,7 @@ public class ParticleColorMenu extends LightShowElementMenu<ParticleColorCue> {
                              @NonNull EditActivity activity,
                              @NonNull ParticleColorCue cue
     ) {
-        super(plugin, lang, activity, cue, LangOptions.inventory_editorpcolor_title.getComponent(lang));
+        super(plugin, lang, activity, cue, ru.sortix.parkourbeat.ui.Glyphs.menuTitle((char) (0xE954 + ru.sortix.parkourbeat.ui.Glyphs.localeSet(lang)), ru.sortix.parkourbeat.ui.Icons.Icon.PENCIL.component().append(net.kyori.adventure.text.Component.text(" ")).append(LangOptions.inventory_editorpcolor_title.getComponent(lang))));
         this.updateItems();
     }
 

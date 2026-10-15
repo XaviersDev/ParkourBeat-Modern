@@ -39,7 +39,9 @@ public class EditorMainMenu extends ParkourBeatInventory implements EditLevelMen
     private int copyConfirmations = 0;
 
     public EditorMainMenu(@NonNull ParkourBeat plugin, String lang, @NonNull EditActivity activity) {
-        super(plugin, 5, lang, LangOptions.inventory_editormain_title.getComponent(lang));
+        super(plugin, 6, lang, ru.sortix.parkourbeat.ui.Glyphs.menuTitle(ru.sortix.parkourbeat.ui.Glyphs.menuEditor(lang),
+            ru.sortix.parkourbeat.ui.Icons.Icon.PENCIL.component().append(net.kyori.adventure.text.Component.text(" "))
+                .append(LangOptions.inventory_editormain_title.getComponent(lang))));
         this.activity = activity;
         this.level = activity.getLevel();
 
@@ -289,6 +291,21 @@ public class EditorMainMenu extends ParkourBeatInventory implements EditLevelMen
         if (ru.sortix.parkourbeat.twod.TwoDManager.isTwoD(this.level)) {
             this.applyTwoDLayout();
         }
+    
+        // Шоу из субтитров (TextDisplay-слова перед лицом игрока по таймкодам трека).
+        int lyricsCount = this.level.getLevelSettings().getGameSettings().getLyricsCues().size();
+        this.setItem(35, ItemUtils.modifyMeta(ru.sortix.parkourbeat.ui.Icons.editor("lyrics",
+                lyricsCount > 0 ? ru.sortix.parkourbeat.ui.Icons.ButtonState.SELECTED : ru.sortix.parkourbeat.ui.Icons.ButtonState.NORMAL), meta -> {
+            int set = ru.sortix.parkourbeat.ui.Glyphs.localeSet(lang);
+            meta.displayName(ru.sortix.parkourbeat.utils.text.PbText.item("<i:chat> &f"
+                + (set == 1 ? "Lyrics show" : set == 2 ? "Шоу із субтитрів" : "Шоу из субтитров")));
+            meta.lore(java.util.List.of(ru.sortix.parkourbeat.utils.text.PbText.item("&7" + (set == 1
+                    ? "Words fly in front of the player to the music"
+                    : set == 2 ? "Слова вилітають перед гравцем під музику" : "Слова вылетают перед игроком под музыку")),
+                ru.sortix.parkourbeat.utils.text.PbText.item(lyricsCount > 0
+                    ? "&a" + lyricsCount + (set == 1 ? " lines" : " фраз")
+                    : "&8" + (set == 1 ? "not uploaded" : set == 2 ? "не завантажено" : "не загружены"))));
+        }), event -> new LyricsMenu(plugin, lang, activity).open(event.getPlayer()));
     }
 
     /**
@@ -1157,5 +1174,79 @@ public class EditorMainMenu extends ParkourBeatInventory implements EditLevelMen
                 new EditorMainMenu(this.plugin, this.lang, this.activity).open(player);
             });
         });
+    }
+
+    // ==================================================================== НОВЫЙ ВИД
+    // Логика меню не менялась: все кнопки ставятся старыми вызовами setItem(ряд, колонка, ...).
+    // Здесь они переезжают в новые места (секции фона menu_editor в РП) и получают иконки
+    // из РП вместо ванильных предметов. Название, описание и количество сохраняются,
+    // состояние (вкл/выкл) берётся из того, какой предмет был выбран раньше.
+    //
+    //   ВИД      частицы, цвет прыжков, музыка, световое шоу, текстуры, свечение
+    //   ТОЧКИ    старт, спавн, маркеры, чекпоинты, зоны падения, сброс точек
+    //   ПРАВИЛА  отталкивание, жёсткость, урон за бег, бесконечный бег, частицы/копатель/2D, боссбар
+    //   УРОВЕНЬ  приватность, соавторы, тип мира, копия, предпросмотр
+    //   [выйти]                                                    [удалить]
+
+    private static final java.util.Map<Integer, Object[]> LAYOUT = new java.util.HashMap<>();
+
+    private static void place(int oldRow, int oldColumn, int newSlot, String icon) {
+        LAYOUT.put(oldRow * 10 + oldColumn, new Object[]{newSlot, icon});
+    }
+
+    static {
+        place(2, 1, 3, "particles");   place(2, 2, 4, "jumpcolor");  place(2, 3, 5, "song");
+        place(2, 7, 6, "lightshow");   place(2, 6, 7, "textures");   place(3, 5, 8, "glow");
+        place(1, 5, 12, "start");      place(2, 5, 13, "spawn");     place(2, 4, 14, "markers");
+        place(3, 4, 15, "checkpoints"); place(2, 8, 16, "fallzones"); place(4, 3, 17, "resetpoints");
+        place(3, 1, 21, "borderpush"); place(3, 2, 22, "difficulty"); place(5, 2, 23, "sprint");
+        place(5, 4, 24, "infinite");   place(5, 3, 25, "particledist"); place(2, 9, 26, "bossbar");
+        place(3, 3, 30, "privacy");    place(3, 7, 31, "coeditors"); place(5, 6, 32, "worldtype");
+        place(5, 7, 33, "copy");       place(5, 5, 34, "preview");
+        place(4, 5, 45, "exit");       place(4, 7, 53, "delete");
+    }
+
+    @Override
+    protected void setItem(int row, int column, @javax.annotation.Nullable org.bukkit.inventory.ItemStack stack,
+                           @javax.annotation.Nullable java.util.function.Consumer<ClickEvent> action) {
+        Object[] target = LAYOUT.get(row * 10 + column);
+        if (target == null) {
+            super.setItem(row, column, stack, action);
+            return;
+        }
+        super.setItem((Integer) target[0], restyle(stack, (String) target[1]), action);
+    }
+
+    @javax.annotation.Nullable
+    private static org.bukkit.inventory.ItemStack restyle(@javax.annotation.Nullable org.bukkit.inventory.ItemStack stack,
+                                                          @NonNull String icon) {
+        if (stack == null) return null;
+        org.bukkit.Material type = stack.getType();
+        String name = icon;
+        if (icon.equals("particledist")) {
+            if (type == org.bukkit.Material.NETHERITE_PICKAXE) name = "digger";
+            else if (type == org.bukkit.Material.REPEATING_COMMAND_BLOCK) name = "twod";
+        }
+        ru.sortix.parkourbeat.ui.Icons.ButtonState state = ru.sortix.parkourbeat.ui.Icons.ButtonState.NORMAL;
+        switch (type) {
+            case ENDER_EYE: case GOLDEN_BOOTS: case IRON_BOOTS: case SLIME_BALL: case DIAMOND_SWORD: case LIME_BANNER:
+                state = ru.sortix.parkourbeat.ui.Icons.ButtonState.SELECTED;
+                break;
+            case GRAY_DYE:
+                if (icon.equals("copy")) state = ru.sortix.parkourbeat.ui.Icons.ButtonState.DISABLED;
+                break;
+            default:
+                break;
+        }
+        org.bukkit.inventory.ItemStack result = ru.sortix.parkourbeat.ui.Icons.editor(name, state);
+        org.bukkit.inventory.meta.ItemMeta source = stack.getItemMeta();
+        org.bukkit.inventory.meta.ItemMeta meta = result.getItemMeta();
+        if (source != null && meta != null) {
+            if (source.hasDisplayName()) meta.displayName(source.displayName());
+            if (source.hasLore()) meta.lore(source.lore());
+            result.setItemMeta(meta);
+        }
+        result.setAmount(Math.max(1, Math.min(64, stack.getAmount())));
+        return result;
     }
 }

@@ -314,6 +314,8 @@ public class PlayActivity extends UserActivity {
 
     private void setupPracticeHotbar() {
         ItemStack stopItem = ItemUtils.create(Material.DIAMOND, meta -> {
+            // Своя иконка (стоп теста) на том же материале - предмет узнаётся как раньше.
+            meta.setCustomModelData(9004);
             meta.displayName(net.kyori.adventure.text.Component.text("Закончить практику")
                 .color(net.kyori.adventure.text.format.NamedTextColor.GREEN)
                 .decoration(net.kyori.adventure.text.format.TextDecoration.BOLD, true)

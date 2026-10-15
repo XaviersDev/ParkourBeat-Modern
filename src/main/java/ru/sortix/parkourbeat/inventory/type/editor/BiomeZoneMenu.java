@@ -19,7 +19,7 @@ public class BiomeZoneMenu extends LightShowElementMenu<BiomeZone> {
                          @NonNull EditActivity activity,
                          @NonNull BiomeZone zone
     ) {
-        super(plugin, lang, activity, zone, LangOptions.inventory_editorbiome_title.getComponent(lang));
+        super(plugin, lang, activity, zone, ru.sortix.parkourbeat.ui.Glyphs.menuTitle((char) (0xE906 + ru.sortix.parkourbeat.ui.Glyphs.localeSet(lang)), ru.sortix.parkourbeat.ui.Icons.Icon.PENCIL.component().append(net.kyori.adventure.text.Component.text(" ")).append(LangOptions.inventory_editorbiome_title.getComponent(lang))));
         this.updateItems();
     }
 

@@ -43,7 +43,21 @@ public class ParticleController {
     private final @NonNull Set<Player> particleViewers = ConcurrentHashMap.newKeySet();
 
     private final @NonNull Set<Player> hiddenViewers = ConcurrentHashMap.newKeySet();
-    private static final double HIDDEN_RADIUS = 5.0D;
+    /*
+     * HIDDEN (усложнён): видно только «окно» трассы впереди.
+     *  - путь пропадает ближе HIDDEN_RADIUS блоков (было 5);
+     *  - маркеры прыжков тоже исчезают ближе HIDDEN_TRIGGER_RADIUS - последний прыжок по памяти и в ритм;
+     *  - дальше HIDDEN_FAR блоков путь не виден - всю трассу заранее не прочитать.
+     * Дальность пути в HIDDEN всегда HIDDEN_VIEW_DISTANCE, а не настройка уровня: иначе на уровнях
+     * с маленькой дальностью слепая зона съедала весь путь, а на больших - почти ничего.
+     * Значения подобраны вживую (эталон).
+     */
+    /** Размер частиц пути (метки прыжков - 1.0). Меньше 0.6 не ставить: у dust от размера зависит время жизни - начнёт мерцать. */
+    public static float PATH_PARTICLE_SIZE = 0.8F;
+    public static double HIDDEN_VIEW_DISTANCE = 10.0D;
+    public static double HIDDEN_RADIUS = 8.75D;
+    public static double HIDDEN_TRIGGER_RADIUS = 7.35D;
+    public static double HIDDEN_FAR = 18.0D;
 
     private boolean isLoaded = false;
 
@@ -129,7 +143,7 @@ public class ParticleController {
                 built,
                 createPathLocations(currentPoint.getLocation(), nextPoint.getLocation(), height),
                 currentPoint.getColor(),
-                1.0f,
+                PATH_PARTICLE_SIZE,
                 false
             );
         }
@@ -192,10 +206,13 @@ public class ParticleController {
             playerLocation = replayActivity.getCurrentLocation();
         }
 
+        // HIDDEN: своя дальность пути (одинаково на всех уровнях), иначе - дальность уровня.
+        boolean hidden = this.hiddenViewers.contains(player);
+        double viewSq = hidden ? HIDDEN_VIEW_DISTANCE * HIDDEN_VIEW_DISTANCE : this.viewDistanceSquared;
         int index = 0;
         int lastInRange = -1;
         for (ParticlePoint point : this.particlePoints) {
-            if (point.getLocation().distanceSquared(playerLocation) <= this.viewDistanceSquared) {
+            if (point.getLocation().distanceSquared(playerLocation) <= viewSq) {
                 lastInRange = index;
             }
             index++;
@@ -207,13 +224,16 @@ public class ParticleController {
         Color jumpColor = this.easedJumpColorFor(player, playerLocation);
 
         index = 0;
-        boolean hidden = this.hiddenViewers.contains(player);
         for (ParticlePoint point : this.particlePoints) {
             if (index > revealed) break;
-            if (point.getLocation().distanceSquared(playerLocation) <= this.viewDistanceSquared) {
-                if (hidden && !point.isJumpTrigger() && point.getLocation().distanceSquared(playerLocation) <= HIDDEN_RADIUS * HIDDEN_RADIUS) {
-                    index++;
-                    continue;
+            if (point.getLocation().distanceSquared(playerLocation) <= viewSq) {
+                if (hidden) {
+                    double d2 = point.getLocation().distanceSquared(playerLocation);
+                    double near = point.isJumpTrigger() ? HIDDEN_TRIGGER_RADIUS : HIDDEN_RADIUS;
+                    if (d2 <= near * near || d2 > HIDDEN_FAR * HIDDEN_FAR) {
+                        index++;
+                        continue;
+                    }
                 }
                 if (point.isJumpTrigger()) {
                     if (jumpColor != null) {

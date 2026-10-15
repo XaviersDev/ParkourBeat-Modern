@@ -211,6 +211,16 @@ public final class WebBridge {
      * снимаются явно. На старых клиентах метод недоступен - там замена работает по-старому.
      */
     private void unloadPacks(Player player) {
+        // Слои (1.20.3+): снимаем ТОЛЬКО пак уровня, базовый остаётся у клиента.
+        try {
+            if (ru.sortix.parkourbeat.packrelay.LayeredPackSender.removeLevel(player)) {
+                this.logger.info("Level resource pack removed for {}", player.getUsername());
+                this.write(player, "tex_unloaded", "");
+                return;
+            }
+        } catch (Throwable t) {
+            this.logger.warn("Unable to remove level pack for {}", player.getUsername(), t);
+        }
         try {
             player.clearResourcePacks();
             this.logger.info("Resource packs cleared for {}", player.getUsername());

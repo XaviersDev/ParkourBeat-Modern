@@ -40,7 +40,7 @@ public class WonderHelpMenu extends ParkourBeatInventory implements EditLevelMen
     };
 
     public WonderHelpMenu(@NonNull ParkourBeat plugin, String lang, @NonNull EditActivity activity) {
-        super(plugin, 4, lang, PbText.of(Lang.raw(lang, "auto.wonder_help_menu.wonder_help_menu.1")));
+        super(plugin, 4, lang, ru.sortix.parkourbeat.ui.Glyphs.menuTitle((char) (0xE99F + ru.sortix.parkourbeat.ui.Glyphs.localeSet(lang)), ru.sortix.parkourbeat.ui.Icons.Icon.PENCIL.component().append(net.kyori.adventure.text.Component.text(" ")).append(PbText.of(Lang.raw(lang, "auto.wonder_help_menu.wonder_help_menu.1")))));
         this.activity = activity;
         this.updateItems();
     }

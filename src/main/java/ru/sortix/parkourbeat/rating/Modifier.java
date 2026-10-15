@@ -34,8 +34,9 @@ public enum Modifier {
     PERFECT("PF", "PERFECT", Theme.V_YELLOW, Material.DIAMOND, 1.5D),
 
     /**
-     * HIDDEN (HD) — the particle path within ~3 blocks in front of the player fades out
-     * smoothly but quickly, osu!-hidden style.
+     * HIDDEN (HD) — only a window of the track is visible (osu!-hidden style): the path
+     * disappears within 8 blocks of the player and beyond 18 blocks, jump markers vanish
+     * within 3 blocks - the last jump is taken from memory and rhythm.
      */
     HIDDEN("HD", "HIDDEN", Theme.V_GREEN, Material.SNOWBALL, 1.2D),
 

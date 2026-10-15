@@ -73,6 +73,29 @@ public final class PbText {
         return parse(input, false, true);
     }
 
+    /**
+     * {@code <sc>текст</sc>} - минималистичный шрифт сервера (ᴛᴇᴋᴄᴛ). Коды цвета,
+     * теги и %плейсхолдеры% внутри не трогаются. Работает в любой строке lang.yml.
+     */
+    @NonNull
+    private static String expandSmallCaps(@NonNull String input) {
+        StringBuilder out = new StringBuilder(input.length());
+        int i = 0;
+        while (true) {
+            int open = input.indexOf("<sc>", i);
+            if (open < 0) {
+                out.append(input, i, input.length());
+                break;
+            }
+            out.append(input, i, open);
+            int close = input.indexOf("</sc>", open + 4);
+            int end = close < 0 ? input.length() : close;
+            out.append(ru.sortix.parkourbeat.ui.SmallCaps.convertTemplate(input.substring(open + 4, end)));
+            i = close < 0 ? input.length() : close + 5;
+        }
+        return out.toString();
+    }
+
     @NonNull
     private static Component parse(@Nullable String input, boolean forItem) {
         return parse(input, forItem, false);
@@ -81,6 +104,7 @@ public final class PbText {
     @NonNull
     private static Component parse(@Nullable String input, boolean forItem, boolean vanillaColors) {
         if (input == null || input.isEmpty()) return Component.empty();
+        if (input.contains("<sc>")) input = expandSmallCaps(input);
 
         List<Component> parts = new ArrayList<>();
         StringBuilder buffer = new StringBuilder();
@@ -93,6 +117,21 @@ public final class PbText {
 
         while (i < length) {
             char current = input.charAt(i);
+
+            // <i:rmb> - пиксельная иконка из РП, всегда в своих цветах (см. ui/Icons)
+            if (current == '<' && input.startsWith("<i:", i)) {
+                int end = input.indexOf('>', i);
+                if (end > 0) {
+                    ru.sortix.parkourbeat.ui.Icons.Icon icon =
+                        ru.sortix.parkourbeat.ui.Icons.Icon.byName(input.substring(i + 3, end));
+                    if (icon != null) {
+                        flush(parts, buffer, color, decorations);
+                        parts.add(icon.component());
+                        i = end + 1;
+                        continue;
+                    }
+                }
+            }
 
             // <v>текст</v> - чужой текст: цвета в нём ванильные, палитра не применяется
             if (current == '<' && input.startsWith("<v>", i)) {

@@ -35,7 +35,7 @@ public class PrivacySettingsMenu extends ParkourBeatInventory implements EditLev
     private final Level level;
 
     protected PrivacySettingsMenu(@NonNull ParkourBeat plugin, String lang, @NonNull EditActivity activity) {
-        super(plugin, 5, lang, LangOptions.inventory_editorprivacy_title.getComponent(lang));
+        super(plugin, 5, lang, ru.sortix.parkourbeat.ui.Glyphs.menuTitle((char) (0xE969 + ru.sortix.parkourbeat.ui.Glyphs.localeSet(lang)), ru.sortix.parkourbeat.ui.Icons.Icon.PENCIL.component().append(net.kyori.adventure.text.Component.text(" ")).append(LangOptions.inventory_editorprivacy_title.getComponent(lang))));
         this.activity = activity;
         this.level = activity.getLevel();
         this.updateItems();

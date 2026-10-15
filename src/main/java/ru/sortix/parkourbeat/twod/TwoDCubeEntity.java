@@ -22,6 +22,12 @@ import java.lang.reflect.Method;
  * Клиенты на старых версиях (те, кто заходит через ViaVersion) вращения не увидят,
  * но и ничего не сломают: сущность для них просто не отобразится нужным образом,
  * а игровая логика вращения вообще не касается.
+ * <p>
+ * <b>PACKET</b> (основной режим на нашем 1.16.5): настоящий BlockDisplay только у клиента
+ * игрока, через ViaVersion ({@link ru.sortix.parkourbeat.ui.PacketBlockDisplay}). Вращение
+ * вокруг центра и перемещение сглаживает сам клиент - кубик кувыркается как в Geometry Dash.
+ * На сервере остаётся лишь невидимый маркер-арморстенд: к нему привязана вся прежняя
+ * логика (метки, владелец, удаление), а видимый кубик - пакетный.
  */
 public class TwoDCubeEntity {
 
@@ -39,6 +45,7 @@ public class TwoDCubeEntity {
 
     public enum Style {
         DISPLAY,
+        PACKET,
         HEAD,
         FALLING_BLOCK
     }
@@ -46,6 +53,12 @@ public class TwoDCubeEntity {
     private final @NonNull World world;
     private final @NonNull Entity entity;
     private final @NonNull Style style;
+    /** Видимый кубик в режиме PACKET (у остальных стилей - null). */
+    private @Nullable ru.sortix.parkourbeat.ui.PacketBlockDisplay packet;
+    /** Лодка полёта (только у клиента), едет пассажиром НА кубике. */
+    private @Nullable ru.sortix.parkourbeat.ui.PacketBoat flightBoat;
+    /** В полёте точка дисплея опущена до лодки, а модель кубика поднята на столько же. */
+    private float flightOffset;
 
     private TwoDCubeEntity(@NonNull World world, @NonNull Entity entity, @NonNull Style style) {
         this.world = world;
@@ -79,11 +92,11 @@ public class TwoDCubeEntity {
     }
 
     public boolean isDisplay() {
-        return this.style == Style.DISPLAY;
+        return this.style == Style.DISPLAY || this.style == Style.PACKET;
     }
 
     public boolean canRotate() {
-        return this.style == Style.DISPLAY || this.style == Style.HEAD;
+        return this.style == Style.DISPLAY || this.style == Style.HEAD || this.style == Style.PACKET;
     }
 
     public boolean isValid() {
@@ -91,7 +104,71 @@ public class TwoDCubeEntity {
     }
 
     public void remove() {
+        this.stopFlight();
+        if (this.packet != null) {
+            this.packet.hide();
+            this.packet = null;
+        }
         this.entity.remove();
+    }
+
+    /**
+     * Сущность передвинута на (x, y, z) - для PACKET переносим и видимый кубик.
+     * y - высота сущности (центр кубика, см. {@link #toEntityY}).
+     */
+    public void moved(double x, double y, double z) {
+        if (this.packet != null) this.packet.teleport(x, y - this.flightOffset, z);
+    }
+
+    /** Кубик - пакетный BlockDisplay (полёт для него - пакетная лодка). */
+    public boolean isPacket() {
+        return this.style == Style.PACKET && this.packet != null;
+    }
+
+    public boolean isFlying() {
+        return this.flightBoat != null;
+    }
+
+    /**
+     * ПОЛЁТ: лодка у клиента едет ПАССАЖИРОМ НА КУБИКЕ.
+     * <p>
+     * Наоборот (кубик в лодке) нельзя: лодка разворачивает пассажира к своему курсу
+     * (clampRotation), и кубик отворачивался от камеры и крутился вокруг чужой оси -
+     * «смотрит назад» и «колбасит» при нажатии. Носитель же свой поворот сохраняет.
+     * Точка дисплея опускается до лодки, а модель кубика поднимается на ту же высоту -
+     * оба сдвига плавные за 2 тика, поэтому на глаз кубик не дёргается.
+     *
+     * @param boatYaw    курс лодки - по ходу уровня, чтобы камера видела её сбоку
+     * @param drop       насколько точка лодки ниже центра кубика из физики
+     * @param cubeOffset насколько модель кубика выше точки лодки (drop + приподнятие на дно лодки)
+     */
+    public boolean startFlight(@NonNull org.bukkit.entity.Player owner, double x, double boatY, double z,
+                               float boatYaw, float drop, float cubeOffset) {
+        if (this.packet == null) return false;
+        this.stopFlight();
+        ru.sortix.parkourbeat.ui.PacketBoat boat = ru.sortix.parkourbeat.ui.PacketBoat.show(owner, x, boatY, z, boatYaw);
+        if (boat == null) return false;
+        this.flightBoat = boat;
+        this.flightOffset = drop;
+        this.packet.carry(boat.getEntityId());
+        this.packet.setOffsetY(cubeOffset, 2);
+        this.packet.teleport(x, boatY, z);
+        return true;
+    }
+
+    /** Лодка едет сама вместе с кубиком - двигать её отдельно не нужно. */
+    public void moveFlight(double x, double boatY, double z, float yaw) {
+    }
+
+    public void stopFlight() {
+        if (this.flightBoat == null) return;
+        if (this.packet != null) {
+            this.packet.dropCarried();
+            this.packet.setOffsetY(0F, 2);
+        }
+        this.flightOffset = 0F;
+        this.flightBoat.hide();
+        this.flightBoat = null;
     }
 
     /**
@@ -102,7 +179,7 @@ public class TwoDCubeEntity {
      */
     public double toEntityY(double bottomY) {
         return switch (this.style) {
-            case DISPLAY -> bottomY + 0.5D;
+            case DISPLAY, PACKET -> bottomY + 0.5D;
             // Блок рисуется на голове арморстенда, а не в его ногах.
             case HEAD -> bottomY + 0.5D + TwoDTuning.CUBE_HEAD_Y_OFFSET;
             case FALLING_BLOCK -> bottomY;
@@ -131,11 +208,30 @@ public class TwoDCubeEntity {
      * на falling_block: без кубика уровень не играется вообще, а без вращения играется.
      */
     @NonNull
-    @SuppressWarnings("unchecked")
     public static TwoDCubeEntity spawn(@NonNull World world, @NonNull Location location,
                                        @NonNull BlockData blockData) {
+        return spawn(world, location, blockData, null);
+    }
+
+    /**
+     * То же, но с владельцем: на сервере без BlockDisplay (наш 1.16.5) кубик рисуется
+     * пакетным BlockDisplay только у него. Стиль по умолчанию (AUTO): настоящий
+     * BlockDisplay сервера -> пакетный BlockDisplay -> falling_block.
+     */
+    @NonNull
+    @SuppressWarnings("unchecked")
+    public static TwoDCubeEntity spawn(@NonNull World world, @NonNull Location location,
+                                       @NonNull BlockData blockData, @Nullable org.bukkit.entity.Player owner) {
         String requested = TwoDTuning.CUBE_STYLE == null
             ? "AUTO" : TwoDTuning.CUBE_STYLE.trim().toUpperCase(java.util.Locale.ROOT);
+
+        boolean wantsPacket = requested.equals("PACKET")
+            || ((requested.equals("AUTO") || requested.equals("DISPLAY")) && displayClass() == null);
+        if (wantsPacket && owner != null && TwoDTuning.CUBE_ROTATION
+            && ru.sortix.parkourbeat.ui.PacketBlockDisplay.canShowTo(owner)) {
+            TwoDCubeEntity packetCube = spawnPacket(world, location, blockData, owner);
+            if (packetCube != null) return packetCube;
+        }
 
         if (requested.equals("HEAD")) {
             TwoDCubeEntity head = spawnHead(world, location, blockData);
@@ -186,6 +282,43 @@ public class TwoDCubeEntity {
         fallingBlock.setHurtEntities(false);
         fallingBlock.setTicksLived(1);
         return new TwoDCubeEntity(world, fallingBlock, Style.FALLING_BLOCK);
+    }
+
+    /**
+     * ПАКЕТНЫЙ КУБИК: невидимый маркер на сервере + BlockDisplay у клиента владельца.
+     */
+    @Nullable
+    private static TwoDCubeEntity spawnPacket(@NonNull World world, @NonNull Location location,
+                                              @NonNull BlockData blockData, @NonNull org.bukkit.entity.Player owner) {
+        org.bukkit.entity.ArmorStand marker = null;
+        try {
+            Location at = location.clone();
+            at.setY(at.getY() + 0.5D);
+            marker = world.spawn(at, org.bukkit.entity.ArmorStand.class, entity -> {
+                entity.setVisible(false);
+                entity.setMarker(true);
+                entity.setSmall(true);
+                entity.setBasePlate(false);
+                entity.setArms(false);
+                entity.setGravity(false);
+                entity.setSilent(true);
+                entity.setInvulnerable(true);
+                entity.setRemoveWhenFarAway(false);
+            });
+            ru.sortix.parkourbeat.ui.PacketBlockDisplay display = ru.sortix.parkourbeat.ui.PacketBlockDisplay.show(
+                owner, blockData, at.getX(), at.getY(), at.getZ(), 2);
+            if (display == null) {
+                marker.remove();
+                return null;
+            }
+            TwoDCubeEntity result = new TwoDCubeEntity(world, marker, Style.PACKET);
+            result.packet = display;
+            return result;
+        } catch (Throwable t) {
+            if (marker != null) marker.remove();
+            org.bukkit.Bukkit.getLogger().warning("[ParkourBeat] 2D: пакетный BlockDisplay недоступен: " + t);
+            return null;
+        }
     }
 
     /**
@@ -244,6 +377,12 @@ public class TwoDCubeEntity {
      * @param interpolationTicks за сколько тиков клиент доводит поворот; 0 значит мгновенно
      */
     public void applyRotation(double angle, @NonNull Vector axis, int interpolationTicks) {
+        if (this.style == Style.PACKET) {
+            if (this.packet != null) {
+                this.packet.rotate(angle, axis.getX(), axis.getY(), axis.getZ(), Math.max(0, interpolationTicks));
+            }
+            return;
+        }
         if (this.style == Style.HEAD) {
             try {
                 // Поза головы крутится вокруг оси взгляда арморстенда, а он у нас

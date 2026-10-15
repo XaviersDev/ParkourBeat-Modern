@@ -78,6 +78,15 @@ public class GameSettingsDAO {
             ratingsList.add(entry.getKey().toString() + ":" + entry.getValue().name());
         }
         config.set("player_ratings", ratingsList);
+
+        List<String> starsList = new ArrayList<>();
+        for (Map.Entry<UUID, Integer> entry : gameSettings.getStarRatings().entrySet()) {
+            starsList.add(entry.getKey().toString() + ":" + entry.getValue());
+        }
+        config.set("star_ratings", starsList);
+        config.set("lyrics.style", gameSettings.getLyricsStyle());
+        config.set("lyrics.reveal", gameSettings.getLyricsReveal());
+        config.set("lyrics.cues", gameSettings.getLyricsCues());
     }
 
     @NonNull
@@ -186,6 +195,18 @@ public class GameSettingsDAO {
             if (parts.length == 2) {
                 try {
                     gameSettings.setPlayerRating(UUID.fromString(parts[0]), LevelDifficulty.valueOf(parts[1]));
+                } catch (Exception ignored) {}
+            }
+        }
+        gameSettings.setLyricsStyle(config.getInt("lyrics.style", 0));
+        gameSettings.setLyricsReveal(config.getInt("lyrics.reveal", 2));
+        gameSettings.setLyricsCues(new ArrayList<>(config.getStringList("lyrics.cues")));
+        for (String starStr : config.getStringList("star_ratings")) {
+            if (starStr == null) continue;
+            String[] parts = starStr.split(":");
+            if (parts.length == 2) {
+                try {
+                    gameSettings.setStarRating(UUID.fromString(parts[0]), Integer.parseInt(parts[1].trim()));
                 } catch (Exception ignored) {}
             }
         }

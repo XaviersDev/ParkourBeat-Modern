@@ -107,7 +107,7 @@ public class PlayerLevelsMenu extends PaginatedMenu<ParkourBeat, RunResult> {
         boolean deleted = settings == null;
 
         LevelDifficulty headDifficulty = currentDifficulty != null ? currentDifficulty : record.getDifficulty();
-        ItemStack head = Heads.getHeadByTextureData(headDifficulty.getHeadBase64(), true);
+        ItemStack head = headDifficulty.createIcon();
 
         return ItemUtils.modifyMeta(head, meta -> {
             String levelName = PbText.keepColors(settings != null ? settings.getDisplayNameLegacy(false) : record.getLevelName());

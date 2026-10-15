@@ -26,21 +26,29 @@ import ru.sortix.parkourbeat.utils.text.Theme;
 import ru.sortix.parkourbeat.utils.text.PbText;
 
 public class PlayerHistoryMenu extends ParkourBeatInventory {
+    // Новая раскладка (фон menu_history): витрина 9x4, карточка аккаунта по центру под ней.
+    static {
+        layout(PlayerHistoryMenu.class, 6, 5, 45, "left");
+        layout(PlayerHistoryMenu.class, 6, 9, 53, null);
+        layout(PlayerHistoryMenu.class, 5, 9, 51, null);
+    }
+
     private static final int[] HISTORY_SLOTS = {
-        19, 20, 21, 22, 23, 24, 25,
-        28, 29, 30, 31, 32, 33, 34,
-        37, 38, 39, 40, 41, 42, 43
+        0, 1, 2, 3, 4, 5, 6, 7, 8,
+        9, 10, 11, 12, 13, 14, 15, 16, 17,
+        18, 19, 20, 21, 22, 23, 24, 25, 26,
+        27, 28, 29, 30, 31, 32, 33, 34, 35
     };
-    private static final int CARD_SLOT = 4;
-    private static final int LOADING_SLOT = 31;
+    private static final int CARD_SLOT = 40;
+    private static final int LOADING_SLOT = 13;
 
     private final @NonNull UUID targetId;
     private final @NonNull String targetName;
 
     public PlayerHistoryMenu(@NonNull ParkourBeat plugin, String lang,
                              @NonNull Player viewer, @NonNull UUID targetId, @NonNull String targetName) {
-        super(plugin, 6, lang, Lang.item(lang, "inventory.playerhistory.title",
-            "%player%", StatsFormat.safeName(targetName)));
+        super(plugin, 6, lang, ru.sortix.parkourbeat.ui.Glyphs.menuTitle(ru.sortix.parkourbeat.ui.Glyphs.menuList("history", lang), ru.sortix.parkourbeat.ui.Icons.Icon.CLOCK.component().append(net.kyori.adventure.text.Component.text(" ")).append(Lang.item(lang, "inventory.playerhistory.title",
+            "%player%", StatsFormat.safeName(targetName)))));
         this.targetId = targetId;
         this.targetName = targetName;
         this.render(viewer);

@@ -29,7 +29,7 @@ public class PortalSideMenu extends ParkourBeatInventory implements EditLevelMen
 
     public PortalSideMenu(@NonNull ParkourBeat plugin, String lang, @NonNull EditActivity activity,
                           @NonNull Portal portal, boolean entrySide) {
-        super(plugin, 4, lang, FallZonesMenu.text(entrySide ? Lang.raw(lang, "auto.portal_side_menu.portal_side_menu.1") : Lang.raw(lang, "auto.portal_side_menu.portal_side_menu.2")));
+        super(plugin, 4, lang, ru.sortix.parkourbeat.ui.Glyphs.menuTitle((char) (0xE963 + ru.sortix.parkourbeat.ui.Glyphs.localeSet(lang)), ru.sortix.parkourbeat.ui.Icons.Icon.PENCIL.component().append(net.kyori.adventure.text.Component.text(" ")).append(FallZonesMenu.text(entrySide ? Lang.raw(lang, "auto.portal_side_menu.portal_side_menu.1") : Lang.raw(lang, "auto.portal_side_menu.portal_side_menu.2")))));
         this.activity = activity;
         this.level = activity.getLevel();
         this.portal = portal;

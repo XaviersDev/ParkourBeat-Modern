@@ -38,7 +38,7 @@ public class WonderEffectMenu extends LightShowElementMenu<WonderEffect> {
                             @NonNull EditActivity activity,
                             @NonNull WonderEffect effect
     ) {
-        super(plugin, lang, activity, effect, PbText.of(Lang.raw(lang, "auto.wonder_effect_menu.wonder_effect_menu.1") + effect.getStartTimecode()));
+        super(plugin, lang, activity, effect, ru.sortix.parkourbeat.ui.Glyphs.menuTitle((char) (0xE996 + ru.sortix.parkourbeat.ui.Glyphs.localeSet(lang)), ru.sortix.parkourbeat.ui.Icons.Icon.PENCIL.component().append(net.kyori.adventure.text.Component.text(" ")).append(PbText.of(Lang.raw(lang, "auto.wonder_effect_menu.wonder_effect_menu.1") + effect.getStartTimecode()))));
         this.updateItems();
     }
 

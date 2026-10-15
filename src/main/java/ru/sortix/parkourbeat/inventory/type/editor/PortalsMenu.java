@@ -30,7 +30,7 @@ public class PortalsMenu extends PaginatedMenu<ParkourBeat, Portal> implements E
     private final @NonNull Level level;
 
     public PortalsMenu(@NonNull ParkourBeat plugin, String lang, @NonNull EditActivity activity) {
-        super(plugin, 6, lang, FallZonesMenu.text(Lang.raw(lang, "auto.portals_menu.portals_menu.1")), 0, 5 * 9);
+        super(plugin, 6, lang, ru.sortix.parkourbeat.ui.Glyphs.menuTitle((char) (0xE966 + ru.sortix.parkourbeat.ui.Glyphs.localeSet(lang)), ru.sortix.parkourbeat.ui.Icons.Icon.PENCIL.component().append(net.kyori.adventure.text.Component.text(" ")).append(FallZonesMenu.text(Lang.raw(lang, "auto.portals_menu.portals_menu.1")))), 0, 5 * 9);
         this.activity = activity;
         this.level = activity.getLevel();
         this.updateAllItems();

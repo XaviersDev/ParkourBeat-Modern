@@ -22,7 +22,7 @@ public class PickaxeCueMenu extends LightShowElementMenu<PickaxeCue> {
                           @NonNull EditActivity activity,
                           @NonNull PickaxeCue cue
     ) {
-        super(plugin, lang, activity, cue, PbText.of("&8Кирка на отрезке"));
+        super(plugin, lang, activity, cue, ru.sortix.parkourbeat.ui.Glyphs.menuTitle((char) (0xE95A + ru.sortix.parkourbeat.ui.Glyphs.localeSet(lang)), ru.sortix.parkourbeat.ui.Icons.Icon.PENCIL.component().append(net.kyori.adventure.text.Component.text(" ")).append(PbText.of("&8Кирка на отрезке"))));
         this.updateItems();
     }
 

@@ -29,13 +29,14 @@ public class LevelDetailsMenu extends ParkourBeatInventory {
 
     public LevelDetailsMenu(@NonNull ParkourBeat plugin, String lang, @NonNull GameSettings settings,
                             @NonNull Player player, @NonNull LevelsListMenu.DisplayMode sourceMode) {
-        super(plugin, 6, lang, LangOptions.inventory_leveldetails_title.getComponent(lang,
-            new Placeholders("%level%", PbText.keepColors(settings.getDisplayNameLegacy(false)))));
+        super(plugin, 6, lang, ru.sortix.parkourbeat.ui.Glyphs.menuTitle(ru.sortix.parkourbeat.ui.Glyphs.menuDetails(lang),
+            ru.sortix.parkourbeat.ui.Icons.Icon.MAP.component().append(net.kyori.adventure.text.Component.text(" "))
+                .append(LangOptions.inventory_leveldetails_title.getComponent(lang,
+                    new Placeholders("%level%", PbText.keepColors(settings.getDisplayNameLegacy(false)))))));
 
-        this.drawBorders();
 
         // 1) статистика — открывает топ прохождений уровня (п.8 ТЗ)
-        this.setItem(3, 3, ItemUtils.create(Material.DIAMOND, meta -> {
+        this.fillHover(TOP_SLOTS, 0, 3, 3, 3, ItemUtils.modifyMeta(ru.sortix.parkourbeat.ui.Icons.empty(), meta -> {
             meta.displayName(LangOptions.inventory_leveldetails_stats_name.getComponent(lang));
 
             List<Component> statsLore = new ArrayList<>(
@@ -75,7 +76,7 @@ public class LevelDetailsMenu extends ParkourBeatInventory {
         }), event -> new LevelTopMenu(plugin, lang, settings, player).open(player));
 
         // 2) играть
-        this.setItem(3, 5, ItemUtils.modifyMeta(UIHeads.PLAY.clone(), meta -> {
+        this.fillHover(PLAY_SLOTS, 0, 0, 8, 1, ItemUtils.modifyMeta(ru.sortix.parkourbeat.ui.Icons.empty(), meta -> {
             String trackName = settings.getMusicTrack() != null ? settings.getMusicTrack().getName() : Lang.raw(lang, "level.track.none");
 
             List<Component> lore = new ArrayList<>(LangOptions.inventory_leveldetails_play_lore.getComponents(lang,
@@ -134,7 +135,7 @@ public class LevelDetailsMenu extends ParkourBeatInventory {
         });
 
         // 3) Оценка сложности
-        this.setItem(3, 7, ItemUtils.create(Material.NETHER_STAR, meta -> {
+        this.fillHover(RATE_SLOTS, 5, 3, 8, 3, ItemUtils.modifyMeta(ru.sortix.parkourbeat.ui.Icons.empty(), meta -> {
             meta.displayName(LangOptions.inventory_leveldetails_rate_name.getComponent(lang));
             meta.lore(LangOptions.inventory_leveldetails_rate_lore.getComponents(lang, new Placeholders("%difficulty%", settings.getDifficulty().getDisplayName())));
         }), event -> {
@@ -142,7 +143,7 @@ public class LevelDetailsMenu extends ParkourBeatInventory {
         });
 
         // Кнопка назад
-        this.setItem(6, 5, ItemUtils.modifyMeta(UIHeads.ARROW_LEFT.clone(), meta -> {
+        this.setItem(6, 1, ItemUtils.modifyMeta(ru.sortix.parkourbeat.ui.Icons.Button.ARROW_LEFT.item(ru.sortix.parkourbeat.ui.Icons.ButtonState.NORMAL), meta -> {
             meta.displayName(LangOptions.inventory_regularitems_previous.getComponent(lang));
         }), event -> {
             // Возвращаемся в тот список, из которого пришли, а не всегда в RANKED.
@@ -167,5 +168,16 @@ public class LevelDetailsMenu extends ParkourBeatInventory {
         while (formatted.endsWith("0")) formatted = formatted.substring(0, formatted.length() - 1);
         if (formatted.endsWith(".")) formatted = formatted.substring(0, formatted.length() - 1);
         return formatted;
+    }
+
+    // ---- большие плитки (фон menu_details в РП): «Играть» 9x2, «Топ» и «Оценить» 4x1
+    private static final int[] PLAY_SLOTS = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17};
+    private static final int[] TOP_SLOTS = {27, 28, 29, 30};
+    private static final int[] RATE_SLOTS = {32, 33, 34, 35};
+
+    private void fillHover(int[] slots, int c0, int r0, int c1, int r1, org.bukkit.inventory.ItemStack item,
+                           java.util.function.Consumer<ru.sortix.parkourbeat.inventory.event.ClickEvent> action) {
+        org.bukkit.inventory.ItemStack framed = ru.sortix.parkourbeat.ui.Glyphs.withHover(item, c0, r0, c1, r1);
+        for (int slot : slots) this.setItem(slot, framed, action);
     }
 }

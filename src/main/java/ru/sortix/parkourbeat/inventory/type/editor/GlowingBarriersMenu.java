@@ -24,7 +24,7 @@ public class GlowingBarriersMenu extends ParkourBeatInventory implements EditLev
     private final @NonNull EditActivity activity;
 
     public GlowingBarriersMenu(@NonNull ParkourBeat plugin, String lang, @NonNull EditActivity activity) {
-        super(plugin, 6, lang, LangOptions.inventory_editorglow_title.getComponent(lang));
+        super(plugin, 6, lang, ru.sortix.parkourbeat.ui.Glyphs.menuTitle((char) (0xE933 + ru.sortix.parkourbeat.ui.Glyphs.localeSet(lang)), ru.sortix.parkourbeat.ui.Icons.Icon.PENCIL.component().append(net.kyori.adventure.text.Component.text(" ")).append(LangOptions.inventory_editorglow_title.getComponent(lang))));
         this.activity = activity;
         this.updateItems();
     }

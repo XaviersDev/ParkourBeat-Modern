@@ -28,7 +28,7 @@ public class CompletionParticlesMenu extends PluginInventory<ParkourBeat> {
 
     public CompletionParticlesMenu(@NonNull ParkourBeat plugin, String lang,
                                    @NonNull EditActivity activity, @NonNull Kind kind) {
-        super(plugin, 6, lang, LangOptions.inventory_editorcompletion_title.getComponent(lang));
+        super(plugin, 6, lang, ru.sortix.parkourbeat.ui.Glyphs.menuTitle((char) (0xE918 + ru.sortix.parkourbeat.ui.Glyphs.localeSet(lang)), ru.sortix.parkourbeat.ui.Icons.Icon.PENCIL.component().append(net.kyori.adventure.text.Component.text(" ")).append(LangOptions.inventory_editorcompletion_title.getComponent(lang))));
         this.activity = activity;
         this.kind = kind;
         this.render();

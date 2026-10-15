@@ -37,11 +37,11 @@ import java.util.UUID;
  */
 public class AllReplaysMenu extends ParkourBeatInventory {
     private static final int[] SLOTS = {
+        1, 2, 3, 4, 5, 6, 7,
         10, 11, 12, 13, 14, 15, 16,
-        19, 20, 21, 22, 23, 24, 25,
-        28, 29, 30, 31, 32, 33, 34
+        19, 20, 21, 22, 23, 24, 25
     };
-    private static final int LOADING_SLOT = 22;
+    private static final int LOADING_SLOT = 13;
     /** Берём с запасом: часть забегов отсеется приватностью и отсутствием записи. */
     private static final int QUERY_LIMIT = 300;
 
@@ -50,30 +50,29 @@ public class AllReplaysMenu extends ParkourBeatInventory {
 
     public AllReplaysMenu(@NonNull ParkourBeat plugin, String lang, @NonNull Player viewer,
                           boolean friendsOnly) {
-        super(plugin, 5, lang, Lang.item(lang, friendsOnly
+        super(plugin, 6, lang, ru.sortix.parkourbeat.ui.Glyphs.menuTitle(ru.sortix.parkourbeat.ui.Glyphs.menuReplays(lang), ru.sortix.parkourbeat.ui.Icons.Icon.REC.component().append(net.kyori.adventure.text.Component.text(" ")).append(Lang.item(lang, friendsOnly
             ? "inventory.allreplays.title_friends"
-            : "inventory.allreplays.title"));
+            : "inventory.allreplays.title"))));
         this.viewer = viewer;
         this.friendsOnly = friendsOnly;
         this.render();
     }
 
     private void render() {
-        this.fillBorder();
 
-        this.setItem(5, 5, ItemUtils.modifyMeta(UIHeads.ARROW_LEFT.clone(), meta ->
+        this.setItem(6, 1, ItemUtils.modifyMeta(ru.sortix.parkourbeat.ui.Icons.Button.ARROW_LEFT.item(ru.sortix.parkourbeat.ui.Icons.ButtonState.NORMAL), meta ->
                 meta.displayName(Lang.item(this.lang, "inventory.common.back"))),
             event -> new ServerMenu(this.plugin, this.lang, this.viewer).open(this.viewer));
 
         if (!this.friendsOnly) {
-            this.setItem(5, 4, ItemUtils.modifyMeta(
+            this.setItem(6, 5, ItemUtils.modifyMeta(
                 StatsFormat.playerHead(this.viewer.getUniqueId(), this.viewer.getName()), meta -> {
                     meta.displayName(Lang.item(this.lang, "inventory.allreplays.friends.name"));
                     meta.lore(Lang.lore(this.lang, "inventory.allreplays.friends.lore"));
                 }), event -> new AllReplaysMenu(this.plugin, this.lang, this.viewer, true)
                 .open(this.viewer));
         } else {
-            this.setItem(5, 4, ItemUtils.create(Material.NETHER_STAR, meta -> {
+            this.setItem(6, 5, ItemUtils.create(Material.NETHER_STAR, meta -> {
                 meta.displayName(Lang.item(this.lang, "inventory.allreplays.all.name"));
                 meta.lore(Lang.lore(this.lang, "inventory.allreplays.all.lore"));
             }), event -> new AllReplaysMenu(this.plugin, this.lang, this.viewer, false)

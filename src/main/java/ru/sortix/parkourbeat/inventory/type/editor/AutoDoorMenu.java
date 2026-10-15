@@ -30,7 +30,7 @@ public class AutoDoorMenu extends ParkourBeatInventory implements EditLevelMenu 
 
     public AutoDoorMenu(@NonNull ParkourBeat plugin, String lang,
                         @NonNull EditActivity activity, @NonNull AutoDoor door) {
-        super(plugin, 5, lang, FallZonesMenu.text(Lang.raw(lang, "auto.auto_door_menu.auto_door_menu.1")));
+        super(plugin, 5, lang, ru.sortix.parkourbeat.ui.Glyphs.menuTitle((char) (0xE900 + ru.sortix.parkourbeat.ui.Glyphs.localeSet(lang)), ru.sortix.parkourbeat.ui.Icons.Icon.PENCIL.component().append(net.kyori.adventure.text.Component.text(" ")).append(FallZonesMenu.text(Lang.raw(lang, "auto.auto_door_menu.auto_door_menu.1")))));
         this.activity = activity;
         this.level = activity.getLevel();
         this.door = door;

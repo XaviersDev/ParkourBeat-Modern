@@ -47,7 +47,7 @@ public class CheckpointsMenu extends ParkourBeatInventory implements EditLevelMe
     private int sliceConfirmations = 0;
 
     public CheckpointsMenu(@NonNull ParkourBeat plugin, String lang, @NonNull EditActivity activity) {
-        super(plugin, 4, lang, FallZonesMenu.text(Lang.raw(lang, "auto.checkpoints_menu.checkpoints_menu.1")));
+        super(plugin, 4, lang, ru.sortix.parkourbeat.ui.Glyphs.menuTitle((char) (0xE912 + ru.sortix.parkourbeat.ui.Glyphs.localeSet(lang)), ru.sortix.parkourbeat.ui.Icons.Icon.PENCIL.component().append(net.kyori.adventure.text.Component.text(" ")).append(FallZonesMenu.text(Lang.raw(lang, "auto.checkpoints_menu.checkpoints_menu.1")))));
         this.activity = activity;
         this.level = activity.getLevel();
         this.render();

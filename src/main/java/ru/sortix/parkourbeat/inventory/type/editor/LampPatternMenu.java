@@ -36,7 +36,7 @@ public class LampPatternMenu extends ParkourBeatInventory implements EditLevelMe
 
     public LampPatternMenu(@NonNull ParkourBeat plugin, String lang,
                            @NonNull EditActivity activity, @NonNull LampWall wall) {
-        super(plugin, 6, lang, PbText.of(Lang.raw(lang, "auto.lamp_pattern_menu.lamp_pattern_menu.1")));
+        super(plugin, 6, lang, ru.sortix.parkourbeat.ui.Glyphs.menuTitle((char) (0xE93F + ru.sortix.parkourbeat.ui.Glyphs.localeSet(lang)), ru.sortix.parkourbeat.ui.Icons.Icon.PENCIL.component().append(net.kyori.adventure.text.Component.text(" ")).append(PbText.of(Lang.raw(lang, "auto.lamp_pattern_menu.lamp_pattern_menu.1")))));
         this.activity = activity;
         this.wall = wall;
         this.load();

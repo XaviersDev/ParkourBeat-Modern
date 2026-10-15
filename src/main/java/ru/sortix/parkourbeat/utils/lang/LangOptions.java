@@ -180,13 +180,25 @@ public enum LangOptions {
             return null;
         }
 
+        // Табло и таб - минималистичным шрифтом. Шаблон переводится ДО подстановки,
+        // поэтому ники, названия карт и цифры остаются как есть.
+        if (ru.sortix.parkourbeat.ui.SmallCaps.isAutoKey(this.name())) {
+            msg = ru.sortix.parkourbeat.ui.SmallCaps.convertTemplate(msg);
+        }
+
+        boolean smallCaps = ru.sortix.parkourbeat.ui.SmallCaps.isAutoKey(this.name());
         for (Placeholders placeholder : placeholders) {
-            msg = msg.replace(placeholder.placeholder, placeholder.value);
+            msg = msg.replace(placeholder.placeholder, smallCaps
+                ? ru.sortix.parkourbeat.ui.SmallCaps.placeholder(placeholder.value) : placeholder.value);
         }
         return msg;
     }
 
     public Component getComponent(String locale, Placeholders...placeholders) {
+        // Титлы проигрыша/финиша - картинки-бейджи из РП вместо текста.
+        ru.sortix.parkourbeat.ui.Glyphs.Badge badge = ru.sortix.parkourbeat.ui.Glyphs.badgeForKey(this.name());
+        if (badge != null) return badge.component(locale);
+
         String msg = this.get(locale, placeholders);
         char startchar = msg.charAt(0), endchar = msg.charAt(msg.length() - 1);
         if (startchar == '[' && endchar == ']' || startchar == '{' && endchar == '}') {

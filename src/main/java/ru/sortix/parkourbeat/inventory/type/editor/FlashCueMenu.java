@@ -17,7 +17,7 @@ public class FlashCueMenu extends LightShowElementMenu<FlashCue> {
                         @NonNull EditActivity activity,
                         @NonNull FlashCue cue
     ) {
-        super(plugin, lang, activity, cue, LangOptions.inventory_editorflash_title.getComponent(lang));
+        super(plugin, lang, activity, cue, ru.sortix.parkourbeat.ui.Glyphs.menuTitle((char) (0xE92D + ru.sortix.parkourbeat.ui.Glyphs.localeSet(lang)), ru.sortix.parkourbeat.ui.Icons.Icon.PENCIL.component().append(net.kyori.adventure.text.Component.text(" ")).append(LangOptions.inventory_editorflash_title.getComponent(lang))));
         this.updateItems();
     }
 

@@ -36,7 +36,7 @@ public class TwoDSettingsMenu extends ParkourBeatInventory implements EditLevelM
     private final @NonNull Level level;
 
     public TwoDSettingsMenu(@NonNull ParkourBeat plugin, String lang, @NonNull EditActivity activity) {
-        super(plugin, 3, lang, PbText.of(Lang.raw(lang, "auto.two_d_settings_menu.two_d_settings_menu.1")));
+        super(plugin, 3, lang, ru.sortix.parkourbeat.ui.Glyphs.menuTitle((char) (0xE984 + ru.sortix.parkourbeat.ui.Glyphs.localeSet(lang)), ru.sortix.parkourbeat.ui.Icons.Icon.PENCIL.component().append(net.kyori.adventure.text.Component.text(" ")).append(PbText.of(Lang.raw(lang, "auto.two_d_settings_menu.two_d_settings_menu.1")))));
         this.activity = activity;
         this.level = activity.getLevel();
         this.render();

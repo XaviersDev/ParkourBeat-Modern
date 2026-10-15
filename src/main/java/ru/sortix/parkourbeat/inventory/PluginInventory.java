@@ -41,13 +41,13 @@ public abstract class PluginInventory<P extends JavaPlugin> implements Inventory
     protected PluginInventory(@NonNull P plugin, int rows, String lang, @NonNull Component title) {
         this.plugin = plugin;
         this.lang = lang;
-        this.handle = plugin.getServer().createInventory(this, rows * 9, title);
+        this.handle = plugin.getServer().createInventory(this, rows * 9, ru.sortix.parkourbeat.ui.MenuTranslator.translate(title, lang));
     }
 
     protected PluginInventory(@NonNull P plugin, @NonNull InventoryType type, String lang, @NonNull Component title) {
         this.plugin = plugin;
         this.lang = lang;
-        this.handle = plugin.getServer().createInventory(this, type, title);
+        this.handle = plugin.getServer().createInventory(this, type, ru.sortix.parkourbeat.ui.MenuTranslator.translate(title, lang));
     }
 
     /**
@@ -57,6 +57,7 @@ public abstract class PluginInventory<P extends JavaPlugin> implements Inventory
      * поэтому её можно рисовать в любой момент отрисовки.
      */
     protected void fillBorder() {
+        if (ru.sortix.parkourbeat.ui.MenuTheme.ENABLED) return; // рамку рисует фон окна (РП)
         ItemStack glass = ru.sortix.parkourbeat.item.ItemUtils.create(
             org.bukkit.Material.BLACK_STAINED_GLASS_PANE,
             meta -> meta.displayName(net.kyori.adventure.text.Component.empty()));
@@ -71,12 +72,49 @@ public abstract class PluginInventory<P extends JavaPlugin> implements Inventory
         }
     }
 
+    // ================================================================ ОФОРМЛЕНИЕ
+    /**
+     * Перестановка кнопок по таблице: меню объявляет в static-блоке
+     * {@code layout(МоёМеню.class, старыйРяд, стараяКолонка, новыйСлот, иконка)} - и все
+     * старые вызовы setItem(ряд, колонка, ...) ставят предмет на новое место. Иконка:
+     * null - оставить предмет; "left"/"right" - наши стрелки (вместо голов-стрелок).
+     */
+    private static final java.util.Map<Class<?>, java.util.Map<Integer, Object[]>> LAYOUTS = new java.util.HashMap<>();
+
+    protected static void layout(@NonNull Class<?> menu, int oldRow, int oldColumn, int newSlot, @Nullable String icon) {
+        LAYOUTS.computeIfAbsent(menu, k -> new java.util.HashMap<>()).put(oldRow * 10 + oldColumn, new Object[]{newSlot, icon});
+    }
+
     protected void setItem(int row, int column, @Nullable ItemStack stack, @Nullable Consumer<ClickEvent> action) {
+        java.util.Map<Integer, Object[]> map = LAYOUTS.get(this.getClass());
+        Object[] target = map == null ? null : map.get(row * 10 + column);
+        if (target != null) {
+            String icon = (String) target[1];
+            if (stack != null && icon != null) {
+                ItemStack styled = (icon.equals("left") ? ru.sortix.parkourbeat.ui.Icons.Button.ARROW_LEFT
+                    : ru.sortix.parkourbeat.ui.Icons.Button.ARROW_RIGHT).item(ru.sortix.parkourbeat.ui.Icons.ButtonState.NORMAL);
+                org.bukkit.inventory.meta.ItemMeta from = stack.getItemMeta();
+                org.bukkit.inventory.meta.ItemMeta to = styled.getItemMeta();
+                if (from != null && to != null) {
+                    if (from.hasDisplayName()) to.displayName(from.displayName());
+                    if (from.hasLore()) to.lore(from.lore());
+                    styled.setItemMeta(to);
+                }
+                stack = styled;
+            }
+            this.setItem((Integer) target[0], stack, action);
+            return;
+        }
         int slot = ((row - 1) * 9) + (column - 1);
         this.setItem(slot, stack, action);
     }
 
     protected void setItem(int slotIndex, @Nullable ItemStack stack, @Nullable Consumer<ClickEvent> action) {
+        // Общая тема (ui/MenuTheme): заглушки убираются, «назад»/«закрыть»/переключатели - наши кнопки.
+        ItemStack themed = ru.sortix.parkourbeat.ui.MenuTheme.apply(this.lang, stack);
+        if (themed != null || action == null) stack = themed;
+        // Английский игрок - русские фразы из кода меню переводятся по словарю (ui/MenuTranslator).
+        stack = ru.sortix.parkourbeat.ui.MenuTranslator.translate(stack, this.lang);
         this.handle.setItem(slotIndex, ItemUtils.fixItalic(stack));
         if (stack == null) {
             if (action == null) this.clickActions.remove(slotIndex);

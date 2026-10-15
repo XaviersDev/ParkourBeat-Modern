@@ -12,6 +12,8 @@ import ru.sortix.parkourbeat.utils.lang.LangOptions;
 public class TestGameItem extends EditorItem {
     public TestGameItem(@NonNull ParkourBeat plugin, String lang, int slot) {
         super(plugin, lang, slot, 20, ItemUtils.create(Material.DIAMOND, (meta) -> {
+            // Своя иконка (тест уровня) на том же материале - предмет узнаётся как раньше.
+            meta.setCustomModelData(9001);
             meta.displayName(LangOptions.item_editor_test.getComponent(lang));
         }));
     }

@@ -40,17 +40,116 @@ public class ScoreboardManager implements PluginManager, Listener {
     private final ActivityManager activityManager;
     private final Map<UUID, ParkourBeatScoreboard> scoreboards = new HashMap<>();
     private final BukkitTask task;
+    private final BukkitTask logoTask;
+    /** Последний заголовок таба каждого игрока: чтобы менять в нём только кадр логотипа. */
+    private final Map<UUID, TabHeader> tabHeaders = new java.util.concurrent.ConcurrentHashMap<>();
+    private char lastTabLogo = 0;
+
+    private static final class TabHeader {
+        final String lang;
+        final Placeholders[] placeholders;
+        final Component footer;
+
+        TabHeader(String lang, Placeholders[] placeholders, Component footer) {
+            this.lang = lang;
+            this.placeholders = placeholders;
+            this.footer = footer;
+        }
+
+        Component header(char logo) {
+            Placeholders[] all = new Placeholders[this.placeholders.length + 1];
+            all[0] = new Placeholders("%logo%", String.valueOf(logo));
+            System.arraycopy(this.placeholders, 0, all, 1, this.placeholders.length);
+            // Отступ под логотипом берём из РУССКОГО шаблона: в английском его не было,
+            // и баннер наезжал на строки. Логотип выше строк, нужны пустые строки под ним.
+            String text = LangOptions.tablist_header.get(this.lang, all);
+            if (text == null) return LangOptions.tablist_header.getComponent(this.lang, all);
+            String logoText = String.valueOf(logo);
+            int at = text.indexOf(logoText);
+            if (at >= 0) {
+                // отступ СВЕРХУ: столько же пустых строк перед логотипом, сколько в русском
+                int before = at;
+                while (before > 0 && text.charAt(before - 1) == '\n') before--;
+                text = text.substring(0, before) + "\n".repeat(logoGapBefore()) + text.substring(at);
+                at = text.indexOf(logoText);
+                int end = at + logoText.length();
+                java.util.regex.Matcher m = java.util.regex.Pattern.compile("^((?:[&\u00A7][0-9a-fk-or])*)(\n*)").matcher(text.substring(end));
+                if (m.find()) {
+                    text = text.substring(0, end) + m.group(1) + "\n".repeat(logoGap()) + text.substring(end + m.end());
+                }
+            }
+            return ru.sortix.parkourbeat.utils.text.PbText.of(text);
+        }
+
+        private static int cachedGapBefore = -1;
+
+        private static int logoGapBefore() {
+            if (cachedGapBefore >= 0) return cachedGapBefore;
+            int gap = 1;
+            try {
+                String ru = LangOptions.tablist_header.get("ru_ru");
+                int at = ru == null ? -1 : ru.indexOf("%logo%");
+                if (at >= 0) {
+                    int n = 0;
+                    while (at - n - 1 >= 0 && ru.charAt(at - n - 1) == '\n') n++;
+                    gap = n;
+                }
+            } catch (Throwable ignored) {
+            }
+            cachedGapBefore = gap;
+            return gap;
+        }
+
+        private static int cachedGap = -1;
+
+        private static int logoGap() {
+            if (cachedGap >= 0) return cachedGap;
+            int gap = 2;
+            try {
+                String ru = LangOptions.tablist_header.get("ru_ru");
+                int at = ru == null ? -1 : ru.indexOf("%logo%");
+                if (at >= 0) {
+                    java.util.regex.Matcher m = java.util.regex.Pattern.compile("^((?:[&\u00A7][0-9a-fk-or])*)(\n*)").matcher(ru.substring(at + 6));
+                    if (m.find() && m.group(2).length() > 0) gap = m.group(2).length();
+                }
+            } catch (Throwable ignored) {
+            }
+            cachedGap = gap;
+            return gap;
+        }
+    }
 
     public ScoreboardManager(ParkourBeat plugin) {
         this.plugin = plugin;
         this.activityManager = plugin.get(ActivityManager.class);
         this.plugin.getServer().getPluginManager().registerEvents(this, plugin);
+        // Плашки «ВЫ УПАЛИ» и т.п. - в актионбар вместо огромного титла (ui/BadgeToActionbar).
+        ru.sortix.parkourbeat.ui.BadgeToActionbar.register(plugin);
+        // Ограничение фейерверков игроков (лаги от спама ракетами на элитрах).
+        ru.sortix.parkourbeat.utils.FireworkLimiter.register(plugin);
 
         this.task = Bukkit.getScheduler().runTaskTimer(plugin, () -> {
             for (Player player : Bukkit.getOnlinePlayers()) {
                 updatePlayerScoreboard(player);
             }
         }, 5L, 5L);
+
+        // Глянец по логотипу в табе и в табло: 40 кадров по тику, пакеты - только при смене кадра.
+        this.logoTask = Bukkit.getScheduler().runTaskTimer(plugin, this::animateLogos, 1L, 1L);
+    }
+
+    private void animateLogos() {
+        long now = System.currentTimeMillis();
+        BasicScoreboard.animateLogos(ru.sortix.parkourbeat.ui.Glyphs.scoreLogo(now));
+
+        char tab = ru.sortix.parkourbeat.ui.Glyphs.tabLogo(now);
+        if (tab == this.lastTabLogo) return;
+        this.lastTabLogo = tab;
+        for (Player player : Bukkit.getOnlinePlayers()) {
+            TabHeader cached = this.tabHeaders.get(player.getUniqueId());
+            if (cached == null || !ru.sortix.parkourbeat.ui.HudSettings.logo(player)) continue;
+            player.sendPlayerListHeaderAndFooter(cached.header(tab), cached.footer);
+        }
     }
 
     private void updatePlayerScoreboard(Player player) {
@@ -219,15 +318,16 @@ public class ScoreboardManager implements PluginManager, Listener {
             : net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer
             .legacyAmpersand().serialize(level.getDisplayName());
 
-        Component header = LangOptions.tablist_header.getComponent(lang,
-            new Placeholders("%logo%", "\uE001"),
+        Component footer = LangOptions.tablist_footer.getComponent(lang);
+        TabHeader tabHeader = new TabHeader(lang, new Placeholders[]{
             new Placeholders("%map%", mapName),
             new Placeholders("%rank%", playerRank),
             new Placeholders("%ping%", ru.sortix.parkourbeat.stats.StatsFormat.ping(ping)),
             new Placeholders("%tps%", String.valueOf(tps))
-        );
-
-        Component footer = LangOptions.tablist_footer.getComponent(lang);
+        }, footer);
+        this.tabHeaders.put(player.getUniqueId(), tabHeader);
+        Component header = tabHeader.header(ru.sortix.parkourbeat.ui.HudSettings.logo(player)
+            ? ru.sortix.parkourbeat.ui.Glyphs.tabLogo(System.currentTimeMillis()) : ru.sortix.parkourbeat.ui.Glyphs.LOGO_TAB);
 
         player.sendPlayerListHeaderAndFooter(header, footer);
         net.kyori.adventure.text.Component tabName = net.kyori.adventure.text.Component.empty()
@@ -261,8 +361,66 @@ public class ScoreboardManager implements PluginManager, Listener {
         return even ? RUNNING_COLOR_A : RUNNING_COLOR_B;
     }
 
+    // ================================================================ ВХОД / ВЫХОД В ЧАТЕ
+    // Минималистично: иконка, ник и слово капителями - каждому на его языке.
+
+    @EventHandler(priority = org.bukkit.event.EventPriority.HIGH)
+    public void onJoinMessage(org.bukkit.event.player.PlayerJoinEvent event) {
+        event.joinMessage(null);
+        broadcastPresence(event.getPlayer(), true);
+    }
+
+    @EventHandler(priority = org.bukkit.event.EventPriority.HIGH)
+    public void onQuitMessage(PlayerQuitEvent event) {
+        event.quitMessage(null);
+        broadcastPresence(event.getPlayer(), false);
+    }
+
+    private void broadcastPresence(Player subject, boolean joined) {
+        for (Player receiver : Bukkit.getOnlinePlayers()) {
+            if (!joined && receiver.getUniqueId().equals(subject.getUniqueId())) continue;
+            int set = ru.sortix.parkourbeat.ui.Glyphs.localeSet(ru.sortix.parkourbeat.utils.lang.PlayerLang.of(receiver));
+            String word = joined
+                ? (set == 1 ? "joined" : set == 2 ? "\u0437\u0430\u0439\u0448\u043e\u0432" : "\u0437\u0430\u0448\u0451\u043b")
+                : (set == 1 ? "left" : set == 2 ? "\u0432\u0438\u0439\u0448\u043e\u0432" : "\u0432\u044b\u0448\u0435\u043b");
+            receiver.sendMessage(ru.sortix.parkourbeat.utils.text.PbText.of((joined ? "<i:plus> " : "<i:leave> ")
+                + "<v>&f" + subject.getName() + "</v> &8" + ru.sortix.parkourbeat.ui.SmallCaps.convert(word)));
+        }
+    }
+
+    // ================================================================ /customsounds
+    // /customsounds - свои звуки у себя вкл/выкл; /customsounds all (оператор) - у всех сразу.
+    @EventHandler(priority = org.bukkit.event.EventPriority.LOWEST)
+    public void onCustomSoundsCommand(org.bukkit.event.player.PlayerCommandPreprocessEvent event) {
+        String msg = event.getMessage().trim().toLowerCase(java.util.Locale.ROOT);
+        if (!msg.equals("/customsounds") && !msg.startsWith("/customsounds ")) return;
+        event.setCancelled(true);
+        Player player = event.getPlayer();
+        boolean all = msg.endsWith(" all") || msg.endsWith(" global");
+        boolean en = ru.sortix.parkourbeat.ui.Glyphs.localeSet(ru.sortix.parkourbeat.utils.lang.PlayerLang.of(player)) == 1;
+        if (all) {
+            if (!player.isOp()) {
+                player.sendMessage(ru.sortix.parkourbeat.utils.text.PbText.of("<i:lock> &c" + (en ? "Operators only"
+                    : "\u0422\u043e\u043b\u044c\u043a\u043e \u0434\u043b\u044f \u043e\u043f\u0435\u0440\u0430\u0442\u043e\u0440\u043e\u0432")));
+                return;
+            }
+            boolean now = !ru.sortix.parkourbeat.ui.UiSounds.globalEnabled();
+            ru.sortix.parkourbeat.ui.UiSounds.setGlobal(now);
+            player.sendMessage(ru.sortix.parkourbeat.utils.text.PbText.of("<i:music> &f" + (en ? "Custom sounds for everyone: "
+                : "\u0421\u0432\u043e\u0438 \u0437\u0432\u0443\u043a\u0438 \u0443 \u0432\u0441\u0435\u0445: ") + (now ? "&aON" : "&cOFF")));
+            return;
+        }
+        boolean now = !ru.sortix.parkourbeat.ui.UiSounds.personal(player);
+        ru.sortix.parkourbeat.ui.UiSounds.setPersonal(player, now);
+        player.sendMessage(ru.sortix.parkourbeat.utils.text.PbText.of("<i:music> &f" + (en ? "Custom sounds: "
+            : "\u0421\u0432\u043e\u0438 \u0437\u0432\u0443\u043a\u0438: ") + (now ? "&aON" : "&cOFF")));
+        ru.sortix.parkourbeat.ui.UiSounds.click(player);
+    }
+
     @EventHandler
     private void onQuit(PlayerQuitEvent event) {
+        this.tabHeaders.remove(event.getPlayer().getUniqueId());
+        ru.sortix.parkourbeat.ui.LevelTransition.cancel(event.getPlayer());
         ParkourBeatScoreboard board = this.scoreboards.remove(event.getPlayer().getUniqueId());
         if (board != null) board.hide();
     }
@@ -270,6 +428,7 @@ public class ScoreboardManager implements PluginManager, Listener {
     @Override
     public void disable() {
         this.task.cancel();
+        this.logoTask.cancel();
         HandlerList.unregisterAll(this);
         for (ParkourBeatScoreboard board : this.scoreboards.values()) {
             board.hide();

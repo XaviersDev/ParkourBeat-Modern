@@ -212,6 +212,7 @@ public class DiggerEndMenu extends ParkourBeatInventory {
 
         Bukkit.getScheduler().runTaskLater(this.plugin, () -> {
             if (!player.isOnline() || this.allowClose) return;
+            if (ru.sortix.parkourbeat.ui.LevelTransition.isRunning(player)) return;
             this.open(player);
         }, 1L);
     }
@@ -301,6 +302,8 @@ public class DiggerEndMenu extends ParkourBeatInventory {
                     // Уровень уже выбран и активность сменилась - значит человек ушёл
                     // играть, и возвращать ему экран финиша прошлой карты незачем.
                     if (!viewer.isOnline()) return;
+                    // Выбран другой уровень и идёт переход - игрок уходит, экран финиша не нужен.
+                    if (ru.sortix.parkourbeat.ui.LevelTransition.isRunning(viewer)) return;
                     if (!viewer.getOpenInventory().getType()
                         .equals(org.bukkit.event.inventory.InventoryType.CRAFTING)) return;
                     if (DiggerEndMenu.this.plugin

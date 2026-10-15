@@ -15,7 +15,7 @@ import java.util.Collection;
 
 public class JumpZonesMenu extends LightShowElementsMenu<JumpZone> {
     public JumpZonesMenu(@NonNull ParkourBeat plugin, String lang, @NonNull EditActivity activity) {
-        super(plugin, lang, activity, LangOptions.inventory_editorjumps_title.getComponent(lang));
+        super(plugin, lang, activity, ru.sortix.parkourbeat.ui.Glyphs.menuTitle((char) (0xE93C + ru.sortix.parkourbeat.ui.Glyphs.localeSet(lang)), ru.sortix.parkourbeat.ui.Icons.Icon.PENCIL.component().append(net.kyori.adventure.text.Component.text(" ")).append(LangOptions.inventory_editorjumps_title.getComponent(lang))));
         this.updateAllItems();
     }
 

@@ -42,7 +42,7 @@ public class WonderAiMenu extends ParkourBeatInventory implements EditLevelMenu 
     private int previewIndex = 0;
 
     public WonderAiMenu(@NonNull ParkourBeat plugin, String lang, @NonNull EditActivity activity) {
-        super(plugin, 5, lang, PbText.of(Lang.raw(lang, "auto.wonder_ai_menu.wonder_ai_menu.1")));
+        super(plugin, 5, lang, ru.sortix.parkourbeat.ui.Glyphs.menuTitle((char) (0xE990 + ru.sortix.parkourbeat.ui.Glyphs.localeSet(lang)), ru.sortix.parkourbeat.ui.Icons.Icon.PENCIL.component().append(net.kyori.adventure.text.Component.text(" ")).append(PbText.of(Lang.raw(lang, "auto.wonder_ai_menu.wonder_ai_menu.1")))));
         this.activity = activity;
         this.level = activity.getLevel();
         this.updateItems();

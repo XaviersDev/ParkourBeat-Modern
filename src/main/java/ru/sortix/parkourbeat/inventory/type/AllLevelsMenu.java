@@ -82,7 +82,7 @@ public class AllLevelsMenu extends PaginatedMenu<ParkourBeat, GameSettings> {
     @NonNull
     protected ItemStack createItemDisplay(@NonNull GameSettings settings) {
         return ItemUtils.modifyMeta(
-            Heads.getHeadByTextureData(settings.getDifficulty().getHeadBase64(), true), meta -> {
+            settings.getDifficulty().createIcon(), meta -> {
                 String name = PbText.keepColors(net.kyori.adventure.text.serializer.legacy
                     .LegacyComponentSerializer.legacyAmpersand().serialize(settings.getDisplayName()));
                 meta.displayName(PbText.item("&f" + name + " &8(#" + settings.getUniqueNumber() + ")"));

@@ -925,9 +925,36 @@ public class AMusicPlatform extends MusicPlatform {
             //
             // Снимаем стек целиком прямо перед отправкой: у игрока всегда должен быть
             // ровно один наш пак, и это тот, который мы отправляем сейчас.
+            //
+            // Клиенты 1.20.3+ - слоями (PackLayers): базовый пак ставится один раз, пак
+            // уровня лежит поверх и снимается ОТДЕЛЬНО. Без этого ViaVersion переводил
+            // каждую отправку в «снять все паки» + «поставить этот».
+            try {
+                String pendingTrack = null;
+                MusicPackDispatcher dispatcher = null;
+                ru.sortix.parkourbeat.player.music.MusicTracksManager music =
+                    this.plugin.get(ru.sortix.parkourbeat.player.music.MusicTracksManager.class);
+                if (music.getPlatform() instanceof AMusicPlatform platform) {
+                    dispatcher = platform.getDispatcher();
+                    pendingTrack = dispatcher.getPendingTrackId(uuid);
+                }
+                boolean coreTrack = CORE_TRACK.equals(pendingTrack);
+                MusicPackDispatcher finalDispatcher = dispatcher;
+                if (PackLayers.send(player, url, sha1, coreTrack, () -> {
+                    if (finalDispatcher != null) finalDispatcher.markLoaded(uuid);
+                })) {
+                    return;
+                }
+            } catch (Throwable t) {
+                this.plugin.getLogger().log(java.util.logging.Level.WARNING,
+                    "Layered resourcepack failed for " + player.getName() + ", using legacy send", t);
+            }
             clearResourcePacks(player, this.plugin);
             player.setResourcePack(url, sha1);
         }
+
+        /** Базовый пак (лобби) - тот же трек, что шлют GamesListener и CustomTexturesManager. */
+        private static final String CORE_TRACK = "ParkourBeatCore";
 
         /**
          * Player#removeResourcePacks() появился только в 1.20.3. На более старом сервере

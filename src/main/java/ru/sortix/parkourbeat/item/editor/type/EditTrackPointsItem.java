@@ -37,6 +37,8 @@ public class EditTrackPointsItem extends EditorItem {
 
     public EditTrackPointsItem(@NonNull ParkourBeat plugin, String lang, int slot) {
         super(plugin, lang, slot, 0, ItemUtils.create(Material.BLAZE_ROD, (meta) -> {
+            // Своя иконка (палочка) на том же материале - предмет узнаётся как раньше.
+            meta.setCustomModelData(9003);
             meta.displayName(LangOptions.item_editor_points_item_name.getComponent(lang));
             meta.lore(LangOptions.item_editor_points_item_lore.getComponents(lang));
         }));

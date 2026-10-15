@@ -133,20 +133,7 @@ public final class GamesListener implements Listener {
         ru.sortix.parkourbeat.player.music.MusicTracksManager musicManager =
             this.plugin.get(ru.sortix.parkourbeat.player.music.MusicTracksManager.class);
 
-        ru.sortix.parkourbeat.player.music.MusicTrack lobbyBasePack =
-            new ru.sortix.parkourbeat.player.music.MusicTrack(
-                musicManager.getPlatform(),
-                "ParkourBeatCore",
-                "ParkourBeatCore",
-                false
-            );
-        musicManager.getPlatform().setResourcepackTrack(player, lobbyBasePack, success -> {
-            if (!success) {
-                this.plugin.getLogger().warning("Не удалось отправить базовый ресурс-пак игроку " + player.getName());
-            } else {
-                this.plugin.getLogger().info("Команда на базовый ресурс-пак успешно отправлена игроку " + player.getName());
-            }
-        });
+
     }
 
     @EventHandler

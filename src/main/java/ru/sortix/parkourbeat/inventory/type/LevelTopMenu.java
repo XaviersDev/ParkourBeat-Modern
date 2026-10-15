@@ -26,13 +26,20 @@ import ru.sortix.parkourbeat.utils.text.Theme;
 import ru.sortix.parkourbeat.utils.text.PbText;
 
 public class LevelTopMenu extends PaginatedMenu<ParkourBeat, RunResult> {
+    // Новая раскладка (фон menu_leveltop): витрина 9x4; под ней [<] [уровень] [>]; внизу назад и твой результат.
+    static {
+        layout(LevelTopMenu.class, 6, 4, 39, null);
+        layout(LevelTopMenu.class, 6, 6, 41, null);
+        layout(LevelTopMenu.class, 6, 5, 45, "left");
+    }
+
     private static final int[] CONTENT_SLOTS = {
-        10, 11, 12, 13, 14, 15, 16,
-        19, 20, 21, 22, 23, 24, 25,
-        28, 29, 30, 31, 32, 33, 34,
-        37, 38, 39, 40, 41, 42, 43
+        0, 1, 2, 3, 4, 5, 6, 7, 8,
+        9, 10, 11, 12, 13, 14, 15, 16, 17,
+        18, 19, 20, 21, 22, 23, 24, 25, 26,
+        27, 28, 29, 30, 31, 32, 33, 34, 35
     };
-    private static final int HEADER_SLOT = 4;
+    private static final int HEADER_SLOT = 40;
 
     private final @NonNull GameSettings settings;
     private final @NonNull Player viewer;
@@ -41,9 +48,8 @@ public class LevelTopMenu extends PaginatedMenu<ParkourBeat, RunResult> {
 
     public LevelTopMenu(@NonNull ParkourBeat plugin, String lang,
                         @NonNull GameSettings settings, @NonNull Player viewer) {
-        super(plugin, 6, lang,
-            Lang.item(lang, "inventory.leveltop.title",
-                "%level%", PbText.keepColors(settings.getDisplayNameLegacy(false))), CONTENT_SLOTS);
+        super(plugin, 6, lang, ru.sortix.parkourbeat.ui.Glyphs.menuTitle(ru.sortix.parkourbeat.ui.Glyphs.menuList("leveltop", lang), ru.sortix.parkourbeat.ui.Icons.Icon.TROPHY.component().append(net.kyori.adventure.text.Component.text(" ")).append(Lang.item(lang, "inventory.leveltop.title",
+                "%level%", PbText.keepColors(settings.getDisplayNameLegacy(false))))), CONTENT_SLOTS);
         this.settings = settings;
         this.viewer = viewer;
         this.updateAllItems();
@@ -126,7 +132,7 @@ public class LevelTopMenu extends PaginatedMenu<ParkourBeat, RunResult> {
         this.setNextPageItem(6, 6);
 
         if (this.currentTop.isEmpty()) {
-            this.setItem(22, ItemUtils.create(Material.BARRIER, meta -> {
+            this.setItem(13, ItemUtils.create(Material.BARRIER, meta -> {
                 meta.displayName(Lang.item(this.lang, "inventory.leveltop.empty.name"));
                 meta.lore(Lang.lore(this.lang, "inventory.leveltop.empty.lore"));
             }), null);
@@ -172,7 +178,7 @@ public class LevelTopMenu extends PaginatedMenu<ParkourBeat, RunResult> {
         RunResult record = statistics.getRecord(this.viewer.getUniqueId(), this.settings.getUniqueId());
 
         if (record == null) {
-            this.setItem(46, ItemUtils.create(Material.PAPER, meta -> {
+            this.setItem(49, ItemUtils.create(Material.PAPER, meta -> {
                 meta.displayName(Lang.item(this.lang, "inventory.leveltop.noresult.name"));
                 meta.lore(Lang.lore(this.lang, "inventory.leveltop.noresult.lore"));
             }), null);
@@ -180,7 +186,7 @@ public class LevelTopMenu extends PaginatedMenu<ParkourBeat, RunResult> {
         }
 
         int position = statistics.getLevelTopPosition(this.settings.getUniqueId(), this.viewer.getUniqueId());
-        this.setItem(46, this.buildEntry(record, position, true), null);
+        this.setItem(49, this.buildEntry(record, position, true), null);
     }
 
     @Override

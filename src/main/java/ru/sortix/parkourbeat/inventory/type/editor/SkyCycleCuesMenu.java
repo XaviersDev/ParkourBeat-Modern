@@ -16,7 +16,7 @@ import java.util.Collection;
 
 public class SkyCycleCuesMenu extends LightShowElementsMenu<SkyCycleCue> {
     public SkyCycleCuesMenu(@NonNull ParkourBeat plugin, String lang, @NonNull EditActivity activity) {
-        super(plugin, lang, activity, LangOptions.inventory_editorcycles_title.getComponent(lang));
+        super(plugin, lang, activity, ru.sortix.parkourbeat.ui.Glyphs.menuTitle((char) (0xE97E + ru.sortix.parkourbeat.ui.Glyphs.localeSet(lang)), ru.sortix.parkourbeat.ui.Icons.Icon.PENCIL.component().append(net.kyori.adventure.text.Component.text(" ")).append(LangOptions.inventory_editorcycles_title.getComponent(lang))));
         this.updateAllItems();
     }
 

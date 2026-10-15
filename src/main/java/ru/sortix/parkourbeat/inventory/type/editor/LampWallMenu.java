@@ -29,7 +29,7 @@ public class LampWallMenu extends LightShowElementMenu<LampWall> {
 
     public LampWallMenu(@NonNull ParkourBeat plugin, String lang,
                         @NonNull EditActivity activity, @NonNull LampWall wall) {
-        super(plugin, lang, activity, wall, PbText.of(Lang.raw(lang, "auto.lamp_wall_menu.lamp_wall_menu.1")));
+        super(plugin, lang, activity, wall, ru.sortix.parkourbeat.ui.Glyphs.menuTitle((char) (0xE942 + ru.sortix.parkourbeat.ui.Glyphs.localeSet(lang)), ru.sortix.parkourbeat.ui.Icons.Icon.PENCIL.component().append(net.kyori.adventure.text.Component.text(" ")).append(PbText.of(Lang.raw(lang, "auto.lamp_wall_menu.lamp_wall_menu.1")))));
         this.updateItems();
     }
 

@@ -70,33 +70,33 @@ public class PlayScoreboard implements ParkourBeatScoreboard {
             lines.add(ru.sortix.parkourbeat.utils.text.PbText.of("&8◆ &7Высота: &f"
                 + (int) Math.round(this.game.getPassedHeight())));
         } else if (!hideProgress) {
-            lines.add(LangOptions.scoreboard_play_progress.getComponent(lang,
-                new Placeholders("%progress%", String.format(java.util.Locale.ROOT, "%.0f", progress))));
+            lines.add(ru.sortix.parkourbeat.ui.ScoreIcons.mark(ru.sortix.parkourbeat.ui.Icons.Icon.CHECKPOINT, LangOptions.scoreboard_play_progress.getComponent(lang,
+                new Placeholders("%progress%", String.format(java.util.Locale.ROOT, "%.0f", progress)))));
         }
 
-        lines.add(LangOptions.scoreboard_play_time.getComponent(lang,
-            new Placeholders("%time%", timecode)));
+        lines.add(ru.sortix.parkourbeat.ui.ScoreIcons.mark(ru.sortix.parkourbeat.ui.Icons.Icon.CLOCK, LangOptions.scoreboard_play_time.getComponent(lang,
+            new Placeholders("%time%", timecode))));
 
-        lines.add(LangOptions.scoreboard_play_accuracy.getComponent(lang,
+        lines.add(ru.sortix.parkourbeat.ui.ScoreIcons.mark(ru.sortix.parkourbeat.ui.Icons.Icon.TARGET, LangOptions.scoreboard_play_accuracy.getComponent(lang,
             new Placeholders("%accuracy%", String.format(java.util.Locale.ROOT, "%.2f", accuracy)),
-            new Placeholders("%grade%", formattedGrade)));
+            new Placeholders("%grade%", formattedGrade))));
 
-        lines.add(LangOptions.scoreboard_play_combo.getComponent(lang,
-            new Placeholders("%combo%", String.valueOf(currentCombo))));
+        lines.add(ru.sortix.parkourbeat.ui.ScoreIcons.mark(ru.sortix.parkourbeat.ui.Icons.Icon.FLAME, LangOptions.scoreboard_play_combo.getComponent(lang,
+            new Placeholders("%combo%", String.valueOf(currentCombo)))));
 
-        lines.add(LangOptions.scoreboard_play_score.getComponent(lang,
-            new Placeholders("%score%", String.valueOf(currentScore))));
+        lines.add(ru.sortix.parkourbeat.ui.ScoreIcons.mark(ru.sortix.parkourbeat.ui.Icons.Icon.COIN, LangOptions.scoreboard_play_score.getComponent(lang,
+            new Placeholders("%score%", String.valueOf(currentScore)))));
 
         lines.add(LangOptions.scoreboard_separator.getComponent(lang));
 
-        lines.add(LangOptions.scoreboard_play_map.getComponent(lang,
-            new Placeholders("%map%", mapName)));
+        lines.add(ru.sortix.parkourbeat.ui.ScoreIcons.mark(ru.sortix.parkourbeat.ui.Icons.Icon.MAP, LangOptions.scoreboard_play_map.getComponent(lang,
+            new Placeholders("%map%", mapName))));
 
-        lines.add(LangOptions.scoreboard_play_ping.getComponent(lang,
-            new Placeholders("%ping%", ru.sortix.parkourbeat.stats.StatsFormat.ping(ping))));
+        lines.add(ru.sortix.parkourbeat.ui.ScoreIcons.mark(ru.sortix.parkourbeat.ui.Icons.Icon.PING, LangOptions.scoreboard_play_ping.getComponent(lang,
+            new Placeholders("%ping%", ru.sortix.parkourbeat.stats.StatsFormat.ping(ping)))));
 
-        lines.add(LangOptions.scoreboard_play_tps.getComponent(lang,
-            new Placeholders("%tps%", String.valueOf(tps))));
+        lines.add(ru.sortix.parkourbeat.ui.ScoreIcons.mark(ru.sortix.parkourbeat.ui.Icons.Icon.BOLT, LangOptions.scoreboard_play_tps.getComponent(lang,
+            new Placeholders("%tps%", String.valueOf(tps)))));
 
         lines.add(LangOptions.scoreboard_separator.getComponent(lang));
 

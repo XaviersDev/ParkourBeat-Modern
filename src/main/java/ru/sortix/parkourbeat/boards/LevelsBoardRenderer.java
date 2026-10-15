@@ -125,7 +125,8 @@ public class LevelsBoardRenderer extends ListBoardRenderer<GameSettings> {
         // ФИКС: подбираем цвета сложности
         Color diffColor = switch (difficulty) {
             case EASY -> new Color(0x55FF55);        // Зеленый
-            case HARD -> new Color(0xFFFF55);        // Желтый
+            case NORMAL -> new Color(0xFFC229);      // Жёлтый
+            case HARD -> new Color(0xFA8500);        // Оранжевый
             case EXPERT -> new Color(0xFF5555);      // Красный
             case EXPERT_PLUS -> new Color(0xFF55FF); // Розовый/Пурпурный
             default -> new Color(0xAAAAAA);          // Серый (N/A)

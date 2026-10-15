@@ -163,7 +163,8 @@ public class FileLevelSettingDAO implements LevelSettingDAO {
 
     private void saveConfig(@NonNull FileConfiguration gameSettingsConfig, @NonNull File gameSettingFile)
         throws IOException {
-        gameSettingsConfig.save(gameSettingFile);
+        // Текст готовится здесь, на диск пишется в фоне и только если что-то изменилось.
+        ru.sortix.parkourbeat.utils.FastSave.write(gameSettingFile, gameSettingsConfig.saveToString());
     }
 
     @Override

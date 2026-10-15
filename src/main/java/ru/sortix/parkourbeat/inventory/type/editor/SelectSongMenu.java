@@ -61,7 +61,7 @@ public class SelectSongMenu extends PaginatedMenu<ParkourBeat, MusicTrack> imple
 
     public SelectSongMenu(@NonNull ParkourBeat plugin, String lang,
                           @NonNull EditActivity activity, boolean showAllTracks) {
-        super(plugin, 6, lang, LangOptions.inventory_editorsong_title.getComponent(lang), 0, 5 * 9);
+        super(plugin, 6, lang, ru.sortix.parkourbeat.ui.Glyphs.menuTitle((char) (0xE975 + ru.sortix.parkourbeat.ui.Glyphs.localeSet(lang)), ru.sortix.parkourbeat.ui.Icons.Icon.PENCIL.component().append(net.kyori.adventure.text.Component.text(" ")).append(LangOptions.inventory_editorsong_title.getComponent(lang))), 0, 5 * 9);
         this.activity = activity;
         this.level = activity.getLevel();
         this.showAllTracks = showAllTracks;

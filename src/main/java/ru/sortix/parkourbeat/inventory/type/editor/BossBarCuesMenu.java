@@ -26,7 +26,7 @@ public class BossBarCuesMenu extends PaginatedMenu<ParkourBeat, BossBarCue> impl
     private final @NonNull Level level;
 
     public BossBarCuesMenu(@NonNull ParkourBeat plugin, String lang, @NonNull EditActivity activity) {
-        super(plugin, 6, lang, LangOptions.inventory_editorbosscues_title.getComponent(lang), 0, 5 * 9);
+        super(plugin, 6, lang, ru.sortix.parkourbeat.ui.Glyphs.menuTitle((char) (0xE90F + ru.sortix.parkourbeat.ui.Glyphs.localeSet(lang)), ru.sortix.parkourbeat.ui.Icons.Icon.PENCIL.component().append(net.kyori.adventure.text.Component.text(" ")).append(LangOptions.inventory_editorbosscues_title.getComponent(lang))), 0, 5 * 9);
         this.activity = activity;
         this.level = activity.getLevel();
         this.updateAllItems();

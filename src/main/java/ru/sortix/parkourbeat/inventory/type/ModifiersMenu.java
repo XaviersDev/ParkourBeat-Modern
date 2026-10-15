@@ -2,8 +2,6 @@ package ru.sortix.parkourbeat.inventory.type;
 
 import lombok.NonNull;
 import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
-import org.bukkit.Material;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import ru.sortix.parkourbeat.ParkourBeat;
@@ -12,65 +10,81 @@ import ru.sortix.parkourbeat.item.ItemUtils;
 import ru.sortix.parkourbeat.rating.Modifier;
 import ru.sortix.parkourbeat.rating.ModifierSet;
 import ru.sortix.parkourbeat.rating.StatisticsManager;
+import ru.sortix.parkourbeat.ui.Glyphs;
+import ru.sortix.parkourbeat.ui.Icons;
+import ru.sortix.parkourbeat.ui.Icons.Button;
+import ru.sortix.parkourbeat.ui.Icons.ButtonState;
 import ru.sortix.parkourbeat.utils.lang.Lang;
+import ru.sortix.parkourbeat.utils.text.PbText;
 
 import java.util.ArrayList;
 import java.util.List;
 
-import ru.sortix.parkourbeat.utils.text.PbText;
+/**
+ * МОДИФИКАТОРЫ.
+ * <pre>
+ *        [PC][PF][HD][SD][HR]      - выбранные подсвечены
+ *   - - - - - - - - - - - - - -
+ *   ИТОГО      [сводка]
+ *   [<-]                    [сброс]
+ * </pre>
+ * Описания модификаторов - те же ключи lang.yml ({@code modifier.<name>.lore}), без изменений.
+ */
 public class ModifiersMenu extends ParkourBeatInventory {
-    private static final LegacyComponentSerializer LEGACY = LegacyComponentSerializer.legacyAmpersand();
-
-    private static final int[] MODIFIER_SLOTS = {10, 11, 12, 13, 14};
+    private static final int FIRST_SLOT = 9 + 2;
+    private static final int SUMMARY_SLOT = 3 * 9 + 4;
+    private static final int BACK_SLOT = 5 * 9;
+    private static final int RESET_SLOT = 5 * 9 + 8;
 
     private final @NonNull Player player;
 
     public ModifiersMenu(@NonNull ParkourBeat plugin, String lang, @NonNull Player player) {
-        super(plugin, 3, lang, Lang.item(lang, "inventory.modifiers.title"));
+        super(plugin, 6, lang, Glyphs.menuTitle(Glyphs.menuModifiers(lang),
+            Icons.Icon.GEAR.component().append(Component.text(" "))
+                .append(Lang.item(lang, "inventory.modifiers.title"))));
         this.player = player;
         this.render();
     }
 
     private void render() {
         this.clearInventory();
-        this.drawBorders();
 
         ModifierSet selection = this.plugin.get(StatisticsManager.class)
             .getSelectedModifiers(this.player.getUniqueId());
 
         Modifier[] modifiers = Modifier.values();
-        for (int i = 0; i < modifiers.length && i < MODIFIER_SLOTS.length; i++) {
+        for (int i = 0; i < modifiers.length && i < 5; i++) {
             Modifier modifier = modifiers[i];
             boolean active = selection.isActive(modifier);
-            this.setItem(MODIFIER_SLOTS[i], buildIcon(modifier, active), event -> {
+            this.setItem(FIRST_SLOT + i, this.buildIcon(modifier, active), event -> {
                 selection.toggle(modifier);
-                this.player.playSound(this.player.getLocation(),
-                    org.bukkit.Sound.UI_BUTTON_CLICK, 1f, 1f);
+                ru.sortix.parkourbeat.ui.UiSounds.click(this.player);
                 this.render();
             });
         }
 
-        this.setItem(16, ItemUtils.create(Material.BARRIER, meta -> {
-            meta.displayName(Lang.item(this.lang, "inventory.modifiers.reset"));
-        }), event -> {
+        this.setItem(SUMMARY_SLOT, this.summary(selection), null);
+
+        this.setItem(BACK_SLOT, ItemUtils.modifyMeta(Button.ARROW_LEFT.item(ButtonState.NORMAL), meta ->
+                meta.displayName(Lang.item(this.lang, "inventory.common.back"))),
+            event -> new ServerMenu(this.plugin, this.lang, event.getPlayer()).open(event.getPlayer()));
+
+        this.setItem(RESET_SLOT, ItemUtils.modifyMeta(Button.TRASH.item(ButtonState.NORMAL), meta ->
+            meta.displayName(Lang.item(this.lang, "inventory.modifiers.reset"))), event -> {
             selection.clear();
-            this.player.playSound(this.player.getLocation(),
-                org.bukkit.Sound.UI_BUTTON_CLICK, 1f, 0.8f);
+            ru.sortix.parkourbeat.ui.UiSounds.click(this.player);
             this.render();
         });
     }
 
     @NonNull
     private ItemStack buildIcon(@NonNull Modifier modifier, boolean active) {
-        return ItemUtils.create(modifier.getIcon(), meta -> {
-            meta.displayName(PbText.of(
-                modifier.getColoredCode() + " &7- " + modifier.getColorPrefix()
-                    + modifier.getDisplayName()));
+        return ItemUtils.modifyMeta(Button.modifier(modifier).item(active ? ButtonState.SELECTED : ButtonState.NORMAL), meta -> {
+            meta.displayName(PbText.of((active ? "<i:check> " : "")
+                + modifier.getColoredCode() + " &7- " + modifier.getColorPrefix() + modifier.getDisplayName()));
 
             List<Component> lore = new ArrayList<>();
             lore.add(Component.empty());
-            // Описание каждого модификатора - свой ключ: строк в нём разное количество,
-            // и переводчику удобнее править их одним куском, а не списком.
             lore.addAll(Lang.lore(this.lang,
                 "modifier." + modifier.name().toLowerCase(java.util.Locale.ROOT) + ".lore"));
             lore.add(Component.empty());
@@ -81,11 +95,26 @@ public class ModifiersMenu extends ParkourBeatInventory {
                 ? "inventory.modifiers.enabled"
                 : "inventory.modifiers.disabled"));
             meta.lore(lore);
+        });
+    }
 
-            if (active) {
-                meta.addEnchant(org.bukkit.enchantments.Enchantment.DURABILITY, 1, true);
-                meta.addItemFlags(org.bukkit.inventory.ItemFlag.HIDE_ENCHANTS);
+    /** Сводка: что включено и общий множитель очков. */
+    @NonNull
+    private ItemStack summary(@NonNull ModifierSet selection) {
+        return ItemUtils.modifyMeta(Button.BOOK.item(ButtonState.NORMAL), meta -> {
+            double total = 1.0D;
+            List<Component> lore = new ArrayList<>();
+            for (Modifier modifier : Modifier.values()) {
+                if (!selection.isActive(modifier)) continue;
+                total *= modifier.getScoreMultiplier();
+                lore.add(PbText.of("<i:check> " + modifier.getColoredCode() + " &7" + modifier.getDisplayName()
+                    + " &8x" + trimTrailingZero(modifier.getScoreMultiplier())));
             }
+            if (lore.isEmpty()) lore.add(PbText.of("&8-"));
+            lore.add(Component.empty());
+            lore.add(Lang.item(this.lang, "inventory.modifiers.multiplier", "%multiplier%", trimTrailingZero(total)));
+            meta.displayName(PbText.of("<i:info> &f" + Lang.raw(this.lang, "inventory.modifiers.title")));
+            meta.lore(lore);
         });
     }
 
@@ -98,14 +127,5 @@ public class ModifiersMenu extends ParkourBeatInventory {
         while (formatted.endsWith("0")) formatted = formatted.substring(0, formatted.length() - 1);
         if (formatted.endsWith(".")) formatted = formatted.substring(0, formatted.length() - 1);
         return formatted;
-    }
-
-    private void drawBorders() {
-        ItemStack glass = ItemUtils.create(Material.GRAY_STAINED_GLASS_PANE,
-            meta -> meta.displayName(Component.empty()));
-        for (int i = 0; i < 27; i++) {
-            boolean isBorder = i < 9 || i >= 18 || i % 9 == 0 || i % 9 == 8;
-            if (isBorder) this.setItem(i, glass, null);
-        }
     }
 }

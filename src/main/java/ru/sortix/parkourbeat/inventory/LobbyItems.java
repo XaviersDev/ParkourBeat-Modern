@@ -135,8 +135,10 @@ public final class LobbyItems implements PluginManager {
 
     @NonNull
     private ItemStack buildStats(String lang) {
-        ItemStack item = ItemUtils.create(Material.EMERALD, meta -> {
-            meta.displayName(Lang.item(lang, "item.lobby.stats.name"));
+        ItemStack item = ItemUtils.modifyMeta(ru.sortix.parkourbeat.ui.Icons.Hotbar.STATS.item(), meta -> {
+            meta.displayName(ru.sortix.parkourbeat.ui.Icons.Icon.TROPHY.component()
+                .append(net.kyori.adventure.text.Component.text(" "))
+                .append(Lang.item(lang, "item.lobby.stats.name")));
             meta.lore(Lang.lore(lang, "item.lobby.stats.lore"));
         });
         return this.tag(item, Kind.STATS);
@@ -144,8 +146,10 @@ public final class LobbyItems implements PluginManager {
 
     @NonNull
     private ItemStack buildPlay(String lang) {
-        ItemStack item = ItemUtils.modifyMeta(UIHeads.PLAY.clone(), meta -> {
-            meta.displayName(Lang.item(lang, "item.lobby.play.name"));
+        ItemStack item = ItemUtils.modifyMeta(ru.sortix.parkourbeat.ui.Icons.Hotbar.PLAY.item(), meta -> {
+            meta.displayName(ru.sortix.parkourbeat.ui.Icons.Icon.PLAY.component()
+                .append(net.kyori.adventure.text.Component.text(" "))
+                .append(Lang.item(lang, "item.lobby.play.name")));
             meta.lore(Lang.lore(lang, "item.lobby.play.lore"));
         });
         return this.tag(item, Kind.PLAY);
@@ -153,8 +157,10 @@ public final class LobbyItems implements PluginManager {
 
     @NonNull
     private ItemStack buildMenu(String lang) {
-        ItemStack item = ItemUtils.modifyMeta(UIHeads.MENU.clone(), meta -> {
-            meta.displayName(Lang.item(lang, "item.lobby.menu.name"));
+        ItemStack item = ItemUtils.modifyMeta(ru.sortix.parkourbeat.ui.Icons.Hotbar.MENU.item(), meta -> {
+            meta.displayName(ru.sortix.parkourbeat.ui.Icons.Icon.CUBE.component()
+                .append(net.kyori.adventure.text.Component.text(" "))
+                .append(Lang.item(lang, "item.lobby.menu.name")));
             meta.lore(Lang.lore(lang, "item.lobby.menu.lore"));
         });
         return this.tag(item, Kind.MENU);
@@ -162,8 +168,10 @@ public final class LobbyItems implements PluginManager {
 
     @NonNull
     private ItemStack buildRecords(String lang) {
-        ItemStack item = ItemUtils.modifyMeta(UIHeads.RECORDS.clone(), meta -> {
-            meta.displayName(Lang.item(lang, "item.lobby.records.name"));
+        ItemStack item = ItemUtils.modifyMeta(ru.sortix.parkourbeat.ui.Icons.Hotbar.RECORDS.item(), meta -> {
+            meta.displayName(ru.sortix.parkourbeat.ui.Icons.Icon.REC.component()
+                .append(net.kyori.adventure.text.Component.text(" "))
+                .append(Lang.item(lang, "item.lobby.records.name")));
             meta.lore(Lang.lore(lang, "item.lobby.records.lore"));
         });
         return this.tag(item, Kind.RECORDS);
@@ -171,8 +179,10 @@ public final class LobbyItems implements PluginManager {
 
     @NonNull
     private ItemStack buildModifiers(String lang) {
-        ItemStack item = ItemUtils.create(Material.FIRE_CHARGE, meta -> {
-            meta.displayName(Lang.item(lang, "item.lobby.modifiers.name"));
+        ItemStack item = ItemUtils.modifyMeta(ru.sortix.parkourbeat.ui.Icons.Hotbar.MODIFIERS.item(), meta -> {
+            meta.displayName(ru.sortix.parkourbeat.ui.Icons.Icon.GEAR.component()
+                .append(net.kyori.adventure.text.Component.text(" "))
+                .append(Lang.item(lang, "item.lobby.modifiers.name")));
             meta.lore(Lang.lore(lang, "item.lobby.modifiers.lore"));
         });
         return this.tag(item, Kind.MODIFIERS);

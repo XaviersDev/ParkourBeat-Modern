@@ -148,6 +148,26 @@ public final class MusicPackDispatcher implements Listener {
         return this.confirmed.get(playerUuid);
     }
 
+    /** Какой трек сейчас ждёт загрузки у игрока (null - ничего). */
+    @Nullable
+    public String getPendingTrackId(@NonNull UUID playerUuid) {
+        Pending p = this.pending.get(playerUuid);
+        return p == null ? null : p.trackId;
+    }
+
+    /**
+     * Пак уже у клиента и грузить нечего (слоёные паки: в лобби снимается только слой
+     * уровня, базовый остаётся). Ответа клиента не будет - засчитываем загрузку сами.
+     */
+    public void markLoaded(@NonNull UUID playerUuid) {
+        if (this.shutdown) return;
+        if (Bukkit.isPrimaryThread()) {
+            this.applyStatus(playerUuid, "SUCCESSFULLY_LOADED");
+            return;
+        }
+        this.plugin.getServer().getScheduler().runTask(this.plugin, () -> this.applyStatus(playerUuid, "SUCCESSFULLY_LOADED"));
+    }
+
     public boolean isPending(@NonNull UUID playerUuid) {
         return this.pending.containsKey(playerUuid);
     }
@@ -281,6 +301,7 @@ public final class MusicPackDispatcher implements Listener {
     @EventHandler(priority = EventPriority.MONITOR)
     public void onQuit(PlayerQuitEvent event) {
         UUID uuid = event.getPlayer().getUniqueId();
+        PackLayers.forget(uuid);
         this.confirmed.remove(uuid);
         this.shownTitles.remove(uuid);
         Pending request = this.pending.get(uuid);

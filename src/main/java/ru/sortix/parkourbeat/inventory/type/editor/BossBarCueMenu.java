@@ -27,7 +27,7 @@ public class BossBarCueMenu extends ParkourBeatInventory implements EditLevelMen
                           @NonNull EditActivity activity,
                           @NonNull BossBarCue cue
     ) {
-        super(plugin, 5, lang, LangOptions.inventory_editorbosscue_title.getComponent(lang));
+        super(plugin, 5, lang, ru.sortix.parkourbeat.ui.Glyphs.menuTitle((char) (0xE90C + ru.sortix.parkourbeat.ui.Glyphs.localeSet(lang)), ru.sortix.parkourbeat.ui.Icons.Icon.PENCIL.component().append(net.kyori.adventure.text.Component.text(" ")).append(LangOptions.inventory_editorbosscue_title.getComponent(lang))));
         this.activity = activity;
         this.level = activity.getLevel();
         this.cue = cue;

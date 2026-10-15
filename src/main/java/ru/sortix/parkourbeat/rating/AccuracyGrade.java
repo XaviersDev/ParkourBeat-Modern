@@ -23,8 +23,15 @@ public enum AccuracyGrade {
     private final @NonNull String letter;
     private final double minAccuracyPercent;
 
+    /** Оценка картинкой из РП (буквы SS / S / A ... / F). */
     @NonNull
     public String getFormatted() {
+        return "&f" + ru.sortix.parkourbeat.ui.Glyphs.grade(this);
+    }
+
+    /** Старый вид - цветная буква текстом. Для мест, где картинка неуместна. */
+    @NonNull
+    public String getTextFormatted() {
         return this.colorCode + "&l" + this.letter;
     }
 

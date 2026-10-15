@@ -25,7 +25,7 @@ public class CustomTexturesMenu extends ParkourBeatInventory implements EditLeve
     private final @NonNull Level level;
 
     public CustomTexturesMenu(@NonNull ParkourBeat plugin, String lang, @NonNull EditActivity activity) {
-        super(plugin, 5, lang, FallZonesMenu.text(Lang.raw(lang, "auto.custom_textures_menu.custom_textures_menu.1")));
+        super(plugin, 5, lang, ru.sortix.parkourbeat.ui.Glyphs.menuTitle((char) (0xE91B + ru.sortix.parkourbeat.ui.Glyphs.localeSet(lang)), ru.sortix.parkourbeat.ui.Icons.Icon.PENCIL.component().append(net.kyori.adventure.text.Component.text(" ")).append(FallZonesMenu.text(Lang.raw(lang, "auto.custom_textures_menu.custom_textures_menu.1")))));
         this.activity = activity;
         this.level = activity.getLevel();
         this.updateItems();

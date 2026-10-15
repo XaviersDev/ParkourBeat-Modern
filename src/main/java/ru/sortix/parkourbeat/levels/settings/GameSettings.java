@@ -425,6 +425,57 @@ public class GameSettings {
         return Collections.unmodifiableMap(this.playerRatings);
     }
 
+    /** Шоу из субтитров: фразы «start|end|text» и стиль (0..4). */
+    private java.util.List<String> lyricsCues = new java.util.ArrayList<>();
+    private int lyricsStyle = 0;
+
+    public java.util.List<String> getLyricsCues() {
+        return this.lyricsCues;
+    }
+
+    public void setLyricsCues(java.util.List<String> cues) {
+        this.lyricsCues = cues == null ? new java.util.ArrayList<>() : cues;
+    }
+
+    /** Как появляется фраза: 0 - сразу, 1 - по словам, 2 - по буквам (печатание). */
+    private int lyricsReveal = 2;
+
+    public int getLyricsReveal() {
+        return this.lyricsReveal;
+    }
+
+    public void setLyricsReveal(int reveal) {
+        this.lyricsReveal = Math.max(0, Math.min(2, reveal));
+    }
+
+    public int getLyricsStyle() {
+        return this.lyricsStyle;
+    }
+
+    public void setLyricsStyle(int style) {
+        this.lyricsStyle = Math.max(0, Math.min(4, style));
+    }
+
+    /** Звёзды качества (1-5) от игроков. */
+    private final Map<UUID, Integer> starRatings = new java.util.HashMap<>();
+
+    public Map<UUID, Integer> getStarRatings() {
+        return Collections.unmodifiableMap(this.starRatings);
+    }
+
+    public void setStarRating(UUID uuid, int stars) {
+        if (stars <= 0) this.starRatings.remove(uuid);
+        else this.starRatings.put(uuid, Math.min(5, stars));
+    }
+
+    /** Средняя оценка 0..5 (0 - оценок нет). */
+    public double getAverageStars() {
+        if (this.starRatings.isEmpty()) return 0.0D;
+        double sum = 0;
+        for (int value : this.starRatings.values()) sum += value;
+        return sum / this.starRatings.size();
+    }
+
     public void setPlayerRating(UUID uuid, LevelDifficulty diff) {
         this.playerRatings.put(uuid, diff);
     }

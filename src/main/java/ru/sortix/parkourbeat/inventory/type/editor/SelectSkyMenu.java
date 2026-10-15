@@ -28,7 +28,7 @@ public class SelectSkyMenu extends ParkourBeatInventory implements EditLevelMenu
                          @NonNull BiConsumer<Player, SkyType> onSelect,
                          @NonNull Consumer<Player> onBack
     ) {
-        super(plugin, 3, lang, LangOptions.inventory_editorsky_title.getComponent(lang));
+        super(plugin, 3, lang, ru.sortix.parkourbeat.ui.Glyphs.menuTitle((char) (0xE972 + ru.sortix.parkourbeat.ui.Glyphs.localeSet(lang)), ru.sortix.parkourbeat.ui.Icons.Icon.PENCIL.component().append(net.kyori.adventure.text.Component.text(" ")).append(LangOptions.inventory_editorsky_title.getComponent(lang))));
         this.currentSky = currentSky;
         this.onSelect = onSelect;
         this.onBack = onBack;

@@ -36,7 +36,7 @@ public class WonderAddMenu extends ParkourBeatInventory implements EditLevelMenu
     private final @NonNull EditActivity activity;
 
     public WonderAddMenu(@NonNull ParkourBeat plugin, String lang, @NonNull EditActivity activity) {
-        super(plugin, 4, lang, PbText.of(Lang.raw(lang, "auto.wonder_add_menu.wonder_add_menu.1")));
+        super(plugin, 4, lang, ru.sortix.parkourbeat.ui.Glyphs.menuTitle((char) (0xE98D + ru.sortix.parkourbeat.ui.Glyphs.localeSet(lang)), ru.sortix.parkourbeat.ui.Icons.Icon.PENCIL.component().append(net.kyori.adventure.text.Component.text(" ")).append(PbText.of(Lang.raw(lang, "auto.wonder_add_menu.wonder_add_menu.1")))));
         this.activity = activity;
         this.updateItems();
     }

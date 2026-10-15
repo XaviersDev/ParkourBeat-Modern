@@ -57,7 +57,7 @@ public class JumpSoundMenu extends PluginInventory<ParkourBeat> {
     private final JumpZone zone;
 
     public JumpSoundMenu(@NonNull ParkourBeat plugin, String lang, @NonNull EditActivity activity, @NonNull JumpZone zone) {
-        super(plugin, 3, lang, LangOptions.inventory_editorjumpsound_title.getComponent(lang));
+        super(plugin, 3, lang, ru.sortix.parkourbeat.ui.Glyphs.menuTitle((char) (0xE936 + ru.sortix.parkourbeat.ui.Glyphs.localeSet(lang)), ru.sortix.parkourbeat.ui.Icons.Icon.PENCIL.component().append(net.kyori.adventure.text.Component.text(" ")).append(LangOptions.inventory_editorjumpsound_title.getComponent(lang))));
         this.activity = activity;
         this.zone = zone;
         this.render();

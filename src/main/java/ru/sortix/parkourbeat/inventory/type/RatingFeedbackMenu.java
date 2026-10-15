@@ -42,7 +42,7 @@ public class RatingFeedbackMenu extends PaginatedMenu<ParkourBeat, GameSettings>
 
     @Override
     protected @NonNull ItemStack createItemDisplay(@NonNull GameSettings settings) {
-        return ItemUtils.modifyMeta(Heads.getHeadByTextureData(settings.getDifficulty().getHeadBase64(), true), meta -> {
+        return ItemUtils.modifyMeta(settings.getDifficulty().createIcon(), meta -> {
 
             // ФИКС ЦВЕТА: Берем готовый Component, а не сырую строку
             meta.displayName(settings.getDisplayName());

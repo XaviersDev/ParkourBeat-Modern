@@ -13,6 +13,8 @@ import ru.sortix.parkourbeat.utils.lang.LangOptions;
 public class EditorMenuItem extends EditorItem {
     public EditorMenuItem(@NonNull ParkourBeat plugin, String lang, int slot) {
         super(plugin, lang, slot, 20, ItemUtils.create(Material.COMPARATOR, (meta) -> {
+            // Своя иконка (настройки) на том же материале - предмет узнаётся как раньше.
+            meta.setCustomModelData(9002);
             meta.displayName(LangOptions.item_editor_parameters.getComponent(lang));
         }));
     }

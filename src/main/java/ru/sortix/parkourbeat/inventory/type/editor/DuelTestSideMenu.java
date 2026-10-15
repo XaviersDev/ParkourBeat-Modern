@@ -21,7 +21,7 @@ public class DuelTestSideMenu extends ParkourBeatInventory {
     private final @NonNull EditActivity activity;
 
     public DuelTestSideMenu(@NonNull ParkourBeat plugin, String lang, @NonNull EditActivity activity) {
-        super(plugin, 1, lang, PbText.of("&8За кого тестируем?"));
+        super(plugin, 1, lang, ru.sortix.parkourbeat.ui.Glyphs.menuTitle((char) (0xE921 + ru.sortix.parkourbeat.ui.Glyphs.localeSet(lang)), ru.sortix.parkourbeat.ui.Icons.Icon.PENCIL.component().append(net.kyori.adventure.text.Component.text(" ")).append(PbText.of("&8За кого тестируем?"))));
         this.activity = activity;
 
         this.setSide(3, DuelSide.FIRST, Material.LAPIS_BLOCK);

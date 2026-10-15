@@ -90,15 +90,21 @@ public final class Lang {
             if (value == null) value = byLocale.get(DEFAULT_LOCALE);
         }
         if (value == null) value = key;
+        else if (ru.sortix.parkourbeat.ui.SmallCaps.isAutoKey(key)) {
+            value = ru.sortix.parkourbeat.ui.SmallCaps.convertTemplate(value);
+        }
 
         for (int i = 0; i + 1 < replacements.length; i += 2) {
-            value = value.replace(replacements[i], replacements[i + 1]);
+            value = value.replace(replacements[i], ru.sortix.parkourbeat.ui.SmallCaps.isAutoKey(key)
+                ? ru.sortix.parkourbeat.ui.SmallCaps.placeholder(replacements[i + 1]) : replacements[i + 1]);
         }
         return value;
     }
 
     @NonNull
     public static Component text(@Nullable String locale, @NonNull String key, @NonNull String... replacements) {
+        ru.sortix.parkourbeat.ui.Glyphs.Badge badge = ru.sortix.parkourbeat.ui.Glyphs.badgeForKey(key);
+        if (badge != null) return badge.component(locale);
         return PbText.of(raw(locale, key, replacements));
     }
 
@@ -109,6 +115,8 @@ public final class Lang {
 
     @NonNull
     public static Component text(@Nullable Player player, @NonNull String key, @NonNull String... replacements) {
+        ru.sortix.parkourbeat.ui.Glyphs.Badge badge = ru.sortix.parkourbeat.ui.Glyphs.badgeForKey(key);
+        if (badge != null) return badge.component(player == null ? null : PlayerLang.of(player));
         return PbText.of(raw(player, key, replacements));
     }
 

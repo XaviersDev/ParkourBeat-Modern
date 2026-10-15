@@ -27,7 +27,7 @@ public class FallZonesMenu extends LightShowElementsMenu<FallZone> {
     private static final LegacyComponentSerializer L = LegacyComponentSerializer.legacyAmpersand();
 
     public FallZonesMenu(@NonNull ParkourBeat plugin, String lang, @NonNull EditActivity activity) {
-        super(plugin, lang, activity, text(Lang.raw(lang, "auto.fall_zones_menu.fall_zones_menu.1")));
+        super(plugin, lang, activity, ru.sortix.parkourbeat.ui.Glyphs.menuTitle((char) (0xE92A + ru.sortix.parkourbeat.ui.Glyphs.localeSet(lang)), ru.sortix.parkourbeat.ui.Icons.Icon.PENCIL.component().append(net.kyori.adventure.text.Component.text(" ")).append(text(Lang.raw(lang, "auto.fall_zones_menu.fall_zones_menu.1")))));
         this.updateAllItems();
     }
 

@@ -67,21 +67,21 @@ public class IdleScoreboard implements ParkourBeatScoreboard {
         List<Component> lines = new ArrayList<>();
         lines.add(LangOptions.scoreboard_separator.getComponent(lang));
 
-        lines.add(LangOptions.scoreboard_idle_nickname.getComponent(lang,
+        lines.add(ru.sortix.parkourbeat.ui.ScoreIcons.mark(ru.sortix.parkourbeat.ui.Icons.Icon.USER, LangOptions.scoreboard_idle_nickname.getComponent(lang,
             new Placeholders("%rank%", playerRank),
-            new Placeholders("%name%", this.player.getName())));
+            new Placeholders("%name%", this.player.getName()))));
 
-        lines.add(LangOptions.scoreboard_idle_score.getComponent(lang,
-            new Placeholders("%score%", String.valueOf(totalScore))));
+        lines.add(ru.sortix.parkourbeat.ui.ScoreIcons.mark(ru.sortix.parkourbeat.ui.Icons.Icon.COIN, LangOptions.scoreboard_idle_score.getComponent(lang,
+            new Placeholders("%score%", String.valueOf(totalScore)))));
 
-        lines.add(LangOptions.scoreboard_idle_accuracy.getComponent(lang,
-            new Placeholders("%accuracy%", String.format(java.util.Locale.ROOT, "%.2f", avgAccuracy))));
+        lines.add(ru.sortix.parkourbeat.ui.ScoreIcons.mark(ru.sortix.parkourbeat.ui.Icons.Icon.TARGET, LangOptions.scoreboard_idle_accuracy.getComponent(lang,
+            new Placeholders("%accuracy%", String.format(java.util.Locale.ROOT, "%.2f", avgAccuracy)))));
 
-        lines.add(LangOptions.scoreboard_idle_maxcombo.getComponent(lang,
-            new Placeholders("%combo%", String.valueOf(maxCombo))));
+        lines.add(ru.sortix.parkourbeat.ui.ScoreIcons.mark(ru.sortix.parkourbeat.ui.Icons.Icon.FLAME, LangOptions.scoreboard_idle_maxcombo.getComponent(lang,
+            new Placeholders("%combo%", String.valueOf(maxCombo)))));
 
-        lines.add(LangOptions.scoreboard_idle_map.getComponent(lang,
-            new Placeholders("%map%", mapName)));
+        lines.add(ru.sortix.parkourbeat.ui.ScoreIcons.mark(ru.sortix.parkourbeat.ui.Icons.Icon.MAP, LangOptions.scoreboard_idle_map.getComponent(lang,
+            new Placeholders("%map%", mapName))));
         if (this.player.hasPermission(PermissionConstants.MODERATE_LEVELS)) {
             long pendingCount = this.plugin.get(LevelsManager.class).getAvailableLevelsSettings().stream()
                 .filter(gs -> gs.getModerationStatus() == ModerationStatus.ON_MODERATION)
@@ -93,14 +93,14 @@ public class IdleScoreboard implements ParkourBeatScoreboard {
 
         lines.add(LangOptions.scoreboard_separator.getComponent(lang));
 
-        lines.add(LangOptions.scoreboard_idle_ping.getComponent(lang,
-            new Placeholders("%ping%", ru.sortix.parkourbeat.stats.StatsFormat.ping(ping))));
+        lines.add(ru.sortix.parkourbeat.ui.ScoreIcons.mark(ru.sortix.parkourbeat.ui.Icons.Icon.PING, LangOptions.scoreboard_idle_ping.getComponent(lang,
+            new Placeholders("%ping%", ru.sortix.parkourbeat.stats.StatsFormat.ping(ping)))));
 
-        lines.add(LangOptions.scoreboard_idle_tps.getComponent(lang,
-            new Placeholders("%tps%", String.valueOf(tps))));
+        lines.add(ru.sortix.parkourbeat.ui.ScoreIcons.mark(ru.sortix.parkourbeat.ui.Icons.Icon.BOLT, LangOptions.scoreboard_idle_tps.getComponent(lang,
+            new Placeholders("%tps%", String.valueOf(tps)))));
 
-        lines.add(LangOptions.scoreboard_idle_ip.getComponent(lang));
-        lines.add(LangOptions.scoreboard_idle_tg.getComponent(lang));
+        lines.add(ru.sortix.parkourbeat.ui.ScoreIcons.mark(ru.sortix.parkourbeat.ui.Icons.Icon.GLOBE, LangOptions.scoreboard_idle_ip.getComponent(lang)));
+        lines.add(ru.sortix.parkourbeat.ui.ScoreIcons.mark(ru.sortix.parkourbeat.ui.Icons.Icon.SEND, LangOptions.scoreboard_idle_tg.getComponent(lang)));
         lines.add(LangOptions.scoreboard_separator.getComponent(lang));
 
         this.board.setLines(lines);

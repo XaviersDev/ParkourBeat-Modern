@@ -37,7 +37,7 @@ public class WonderDrawMenu extends ParkourBeatInventory implements EditLevelMen
 
     public WonderDrawMenu(@NonNull ParkourBeat plugin, String lang,
                           @NonNull EditActivity activity, @NonNull WonderEffect effect) {
-        super(plugin, 6, lang, PbText.of(Lang.raw(lang, "auto.wonder_draw_menu.wonder_draw_menu.1")));
+        super(plugin, 6, lang, ru.sortix.parkourbeat.ui.Glyphs.menuTitle((char) (0xE993 + ru.sortix.parkourbeat.ui.Glyphs.localeSet(lang)), ru.sortix.parkourbeat.ui.Icons.Icon.PENCIL.component().append(net.kyori.adventure.text.Component.text(" ")).append(PbText.of(Lang.raw(lang, "auto.wonder_draw_menu.wonder_draw_menu.1")))));
         this.activity = activity;
         this.effect = effect;
         this.load();

@@ -17,7 +17,7 @@ public class WeatherCueMenu extends LightShowElementMenu<WeatherCue> {
                           @NonNull EditActivity activity,
                           @NonNull WeatherCue cue
     ) {
-        super(plugin, lang, activity, cue, LangOptions.inventory_editorweather_title.getComponent(lang));
+        super(plugin, lang, activity, cue, ru.sortix.parkourbeat.ui.Glyphs.menuTitle((char) (0xE987 + ru.sortix.parkourbeat.ui.Glyphs.localeSet(lang)), ru.sortix.parkourbeat.ui.Icons.Icon.PENCIL.component().append(net.kyori.adventure.text.Component.text(" ")).append(LangOptions.inventory_editorweather_title.getComponent(lang))));
         this.updateItems();
     }
 

@@ -23,7 +23,7 @@ public class SelectBiomeMenu extends ParkourBeatInventory implements EditLevelMe
                            @NonNull BiConsumer<Player, LevelBiome> onSelect,
                            @NonNull Consumer<Player> onBack
     ) {
-        super(plugin, 4, lang, LangOptions.inventory_editorbiomeselect_title.getComponent(lang));
+        super(plugin, 4, lang, ru.sortix.parkourbeat.ui.Glyphs.menuTitle((char) (0xE96C + ru.sortix.parkourbeat.ui.Glyphs.localeSet(lang)), ru.sortix.parkourbeat.ui.Icons.Icon.PENCIL.component().append(net.kyori.adventure.text.Component.text(" ")).append(LangOptions.inventory_editorbiomeselect_title.getComponent(lang))));
 
         List<LevelBiome> biomes = LevelBiome.supported();
         for (int index = 0; index < biomes.size() && index < 14; index++) {

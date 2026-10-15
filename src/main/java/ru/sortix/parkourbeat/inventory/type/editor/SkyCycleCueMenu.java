@@ -17,7 +17,7 @@ public class SkyCycleCueMenu extends LightShowElementMenu<SkyCycleCue> {
                            @NonNull EditActivity activity,
                            @NonNull SkyCycleCue cue
     ) {
-        super(plugin, lang, activity, cue, LangOptions.inventory_editorcycle_title.getComponent(lang));
+        super(plugin, lang, activity, cue, ru.sortix.parkourbeat.ui.Glyphs.menuTitle((char) (0xE97B + ru.sortix.parkourbeat.ui.Glyphs.localeSet(lang)), ru.sortix.parkourbeat.ui.Icons.Icon.PENCIL.component().append(net.kyori.adventure.text.Component.text(" ")).append(LangOptions.inventory_editorcycle_title.getComponent(lang))));
         this.updateItems();
     }
 

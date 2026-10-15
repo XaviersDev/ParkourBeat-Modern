@@ -70,18 +70,44 @@ public abstract class PaginatedMenu<P extends JavaPlugin, Item> extends PluginIn
         this.onPageDisplayed();
     }
 
+    /** Номер открытой страницы (с 1). */
+    protected int getCurrentPageNumber() {
+        return this.currentPageNumber;
+    }
+
+    /** Открыть страницу (вне диапазона - ничего не делает). */
+    protected void showPage(int pageNumber) {
+        this.displayPage(pageNumber);
+    }
+
+    /** Сколько всего элементов в списке (после фильтров). */
+    protected int getTotalItemsCount() {
+        return this.allItems.size();
+    }
+
     protected void setPreviousPageItem(int row, int column) {
-        if (this.currentPageNumber > this.minPageNumber) {
-            this.setItem(row, column, ItemUtils.modifyMeta(UIHeads.ARROW_LEFT.clone(), m -> m.displayName(PbText.of(Lang.raw(this.lang, "auto.paginated_menu.set_previous_page_item.1")))),
-                event -> this.displayPage(this.currentPageNumber - 1));
-        }
+        boolean can = this.currentPageNumber > this.minPageNumber;
+        this.setItem(row, column, ItemUtils.modifyMeta(ru.sortix.parkourbeat.ui.Icons.Button.ARROW_LEFT.item(
+                can ? ru.sortix.parkourbeat.ui.Icons.ButtonState.NORMAL : ru.sortix.parkourbeat.ui.Icons.ButtonState.DISABLED),
+                m -> m.displayName(PbText.of(Lang.raw(this.lang, "auto.paginated_menu.set_previous_page_item.1")))),
+            can ? event -> this.displayPage(this.currentPageNumber - 1) : null);
     }
 
     protected void setNextPageItem(int row, int column) {
-        if (this.currentPageNumber < this.maxPageNumber) {
-            this.setItem(row, column, ItemUtils.modifyMeta(UIHeads.ARROW_RIGHT.clone(), m -> m.displayName(PbText.of(Lang.raw(this.lang, "auto.paginated_menu.set_next_page_item.1")))),
-                event -> this.displayPage(this.currentPageNumber + 1));
-        }
+        boolean can = this.currentPageNumber < this.maxPageNumber;
+        this.setItem(row, column, ItemUtils.modifyMeta(ru.sortix.parkourbeat.ui.Icons.Button.ARROW_RIGHT.item(
+                can ? ru.sortix.parkourbeat.ui.Icons.ButtonState.NORMAL : ru.sortix.parkourbeat.ui.Icons.ButtonState.DISABLED),
+                m -> m.displayName(PbText.of(Lang.raw(this.lang, "auto.paginated_menu.set_next_page_item.1")))),
+            can ? event -> this.displayPage(this.currentPageNumber + 1) : null);
+    }
+
+    /** Номер страницы на кнопке (число на предмете = номер страницы). */
+    protected void setPageIndicator(int row, int column) {
+        ItemStack page = ItemUtils.modifyMeta(ru.sortix.parkourbeat.ui.Icons.Button.PAGE.item(
+            ru.sortix.parkourbeat.ui.Icons.ButtonState.SELECTED), m ->
+            m.displayName(PbText.of("<i:book> &f" + this.currentPageNumber + " / " + this.maxPageNumber)));
+        page.setAmount(Math.max(1, Math.min(64, this.currentPageNumber)));
+        this.setItem(row, column, page, null);
     }
 
     @NonNull protected abstract Collection<Item> getAllItems();

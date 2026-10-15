@@ -22,12 +22,14 @@ import java.util.List;
 
 public class GlobalStatisticsMenu extends PaginatedMenu<ParkourBeat, ProfileSummary> {
     private static final int[] CONTENT_SLOTS = {
-        10, 11, 12, 13, 14, 15, 16,
-        19, 20, 21, 22, 23, 24, 25,
-        28, 29, 30, 31, 32, 33, 34,
-        37, 38, 39, 40, 41, 42, 43
+        0, 1, 2, 3, 4, 5, 6, 7, 8,
+        9, 10, 11, 12, 13, 14, 15, 16, 17,
+        18, 19, 20, 21, 22, 23, 24, 25, 26,
+        27, 28, 29, 30, 31, 32, 33, 34, 35
     };
-    private static final int VIEWER_SLOT = 4;
+    /** Твоя карточка - отдельная плашка «Профиль» внизу (голова + подпись на фоне). */
+    private static final int[] VIEWER_CARD_SLOTS = {48, 49, 50, 51};
+    private static final int VIEWER_SLOT = 47;
 
     private final @NonNull Player viewer;
     private @NonNull StatisticsManager.SortKey sortKey = StatisticsManager.SortKey.PP;
@@ -35,7 +37,7 @@ public class GlobalStatisticsMenu extends PaginatedMenu<ParkourBeat, ProfileSumm
     private List<ProfileSummary> currentOrder = new ArrayList<>();
 
     public GlobalStatisticsMenu(@NonNull ParkourBeat plugin, String lang, @NonNull Player viewer) {
-        super(plugin, 6, lang, Lang.item(lang, "inventory.globalstats.title"), CONTENT_SLOTS);
+        super(plugin, 6, lang, ru.sortix.parkourbeat.ui.Glyphs.menuTitle(ru.sortix.parkourbeat.ui.Glyphs.menuTop(lang), ru.sortix.parkourbeat.ui.Icons.Icon.TROPHY.component().append(net.kyori.adventure.text.Component.text(" ")).append(Lang.item(lang, "inventory.globalstats.title"))), CONTENT_SLOTS);
         this.viewer = viewer;
         this.updateAllItems();
     }
@@ -98,12 +100,12 @@ public class GlobalStatisticsMenu extends PaginatedMenu<ParkourBeat, ProfileSumm
             meta -> meta.displayName(Component.empty()));
         for (int slot = 0; slot < 54; slot++) {
             if (isContentSlot(slot)) continue;
-            this.setItem(slot, glass, null);
+            // фон рисует РП
         }
 
         this.drawViewerPlate();
 
-        this.setItem(6, 2, ItemUtils.modifyMeta(UIHeads.SORT.clone(), meta -> {
+        this.setItem(6, 9, ItemUtils.modifyMeta(ru.sortix.parkourbeat.ui.Icons.Button.SORT_ASC.item(ru.sortix.parkourbeat.ui.Icons.ButtonState.NORMAL), meta -> {
             meta.displayName(Lang.item(this.lang, "inventory.globalstats.sort.name",
                 "%sort%", this.sortKey.getDisplay(this.lang)));
             List<Component> lore = new ArrayList<>();
@@ -122,13 +124,14 @@ public class GlobalStatisticsMenu extends PaginatedMenu<ParkourBeat, ProfileSumm
             this.updateAllItems();
         });
 
-        this.setPreviousPageItem(6, 4);
-        this.setItem(6, 5, ItemUtils.create(Material.BARRIER, meta ->
+        this.setPreviousPageItem(5, 4);
+        this.setPageIndicator(5, 5);
+        this.setItem(6, 1, ItemUtils.modifyMeta(ru.sortix.parkourbeat.ui.Icons.cancel(), meta ->
             meta.displayName(Lang.item(this.lang, "inventory.common.close"))), event -> event.getPlayer().closeInventory());
-        this.setNextPageItem(6, 6);
+        this.setNextPageItem(5, 6);
 
         if (this.currentOrder.isEmpty()) {
-            this.setItem(22, ItemUtils.create(Material.BARRIER, meta ->
+            this.setItem(13, ItemUtils.create(Material.BARRIER, meta ->
                 meta.displayName(Lang.item(this.lang, "inventory.globalstats.empty"))), null);
         }
     }
@@ -148,9 +151,18 @@ public class GlobalStatisticsMenu extends PaginatedMenu<ParkourBeat, ProfileSumm
         }
 
         final ProfileSummary finalSummary = viewerSummary;
-        this.setItem(VIEWER_SLOT, buildHead(viewerSummary, this.rankOf(viewerSummary), true), event ->
+        java.util.function.Consumer<ClickEvent> open = event ->
             new PlayerStatisticsMenu(this.plugin, this.lang, this.viewer,
-                finalSummary.getPlayerId(), finalSummary.getPlayerName()).open(this.viewer));
+                finalSummary.getPlayerId(), finalSummary.getPlayerName()).open(this.viewer);
+        // Голова + три прозрачных слота с тем же описанием: вся плашка - одна кнопка с общей рамкой.
+        ItemStack head = buildHead(viewerSummary, this.rankOf(viewerSummary), true);
+        ItemStack card = ItemUtils.modifyMeta(ru.sortix.parkourbeat.ui.Icons.empty(), meta -> {
+            meta.displayName(head.getItemMeta().displayName());
+            meta.lore(head.getItemMeta().lore());
+        });
+        this.setItem(VIEWER_SLOT, ru.sortix.parkourbeat.ui.Glyphs.withHover(head, 2, 5, 6, 5), open);
+        ItemStack framed = ru.sortix.parkourbeat.ui.Glyphs.withHover(card, 2, 5, 6, 5);
+        for (int slot : VIEWER_CARD_SLOTS) this.setItem(slot, framed, open);
     }
 
     @Override

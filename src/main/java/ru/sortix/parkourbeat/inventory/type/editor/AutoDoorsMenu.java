@@ -30,7 +30,7 @@ public class AutoDoorsMenu extends PaginatedMenu<ParkourBeat, AutoDoor> implemen
     private final @NonNull Level level;
 
     public AutoDoorsMenu(@NonNull ParkourBeat plugin, String lang, @NonNull EditActivity activity) {
-        super(plugin, 6, lang, FallZonesMenu.text(Lang.raw(lang, "auto.auto_doors_menu.auto_doors_menu.1")), 0, 5 * 9);
+        super(plugin, 6, lang, ru.sortix.parkourbeat.ui.Glyphs.menuTitle((char) (0xE903 + ru.sortix.parkourbeat.ui.Glyphs.localeSet(lang)), ru.sortix.parkourbeat.ui.Icons.Icon.PENCIL.component().append(net.kyori.adventure.text.Component.text(" ")).append(FallZonesMenu.text(Lang.raw(lang, "auto.auto_doors_menu.auto_doors_menu.1")))), 0, 5 * 9);
         this.activity = activity;
         this.level = activity.getLevel();
         this.updateAllItems();

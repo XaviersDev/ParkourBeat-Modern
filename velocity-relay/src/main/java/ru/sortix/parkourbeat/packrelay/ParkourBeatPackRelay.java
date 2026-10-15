@@ -36,8 +36,11 @@ import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
@@ -47,7 +50,7 @@ import java.util.concurrent.TimeUnit;
     name = "ParkourBeatPackRelay",
     version = "1.1.0",
     dependencies = {
-    		@Dependency(id = "geyser", optional = true)
+        @Dependency(id = "geyser", optional = true)
     },
     description = "Resource pack status relay and AMusic reliability patches",
     authors = {"ParkourBeat"})
@@ -61,6 +64,7 @@ public final class ParkourBeatPackRelay {
     private final Logger logger;
     private final Path dataDirectory;
     private final Map<UUID, String> lastStatus = new ConcurrentHashMap<>();
+    private final Set<UUID> corePackSent = ConcurrentHashMap.newKeySet();
 
     private RelayConfig config;
     private PackWatchdog watchdog;
@@ -70,7 +74,8 @@ public final class ParkourBeatPackRelay {
     private SlicerBridge slicerBridge;
     private AMusic amusic;
     private PackMergeSourceMap packmergesource;
-    
+    private AMusicInitializator amusicInit;
+
     @Inject
     public ParkourBeatPackRelay(ProxyServer server, Logger logger, @DataDirectory Path dataDirectory) {
         this.server = server;
@@ -82,19 +87,24 @@ public final class ParkourBeatPackRelay {
     public void onInit(ProxyInitializeEvent event) {
         this.config = RelayConfig.load(this.dataDirectory, this.logger);
         this.server.getChannelRegistrar().register(CHANNEL);
-        
+
         AMusic amusic = null;
         PackMergeSourceMap packmergesource = null;
         try {
-        	AMusicInitializator amusicinit = new AMusicInitializator(this, this.server, this.logger, this.dataDirectory, this.config.patchStrictAccess, this.config.patchWaitAcception);
-        	amusic = amusicinit.amusic;
-        	packmergesource = amusicinit.packmergesource;
+            // Статус «загружено» для повторной отправки базового пака (качать нечего,
+            // клиент ничего не ответит) - сразу на бэкенд.
+            LayeredPackSender.statusRelay = (player, status) -> {
+                if (this.config.relayToBackend) this.send(player, status, 0);
+            };
+            this.amusicInit = new AMusicInitializator(this, this.server, this.logger, this.dataDirectory, this.config.patchStrictAccess, this.config.patchWaitAcception);
+            amusic = this.amusicInit.amusic;
+            packmergesource = this.amusicInit.packmergesource;
         } catch (IllegalStateException e) {
-        	logger.warn(e.getMessage());
+            logger.warn(e.getMessage());
         }
         this.amusic = amusic;
         this.packmergesource = packmergesource;
-        
+
         this.watchdog = new PackWatchdog(this, this.server, this.logger, this.config);
         this.watchdog.start();
 
@@ -110,7 +120,6 @@ public final class ParkourBeatPackRelay {
      */
     private void startSlicer() {
         try {
-            // Принудительно выдаем права на запуск из-под Java
             new java.io.File(this.config.ffmpegPath).setExecutable(true);
             new java.io.File(this.config.ffprobePath).setExecutable(true);
 
@@ -121,8 +130,6 @@ public final class ParkourBeatPackRelay {
             TrackSlicer slicer = new TrackSlicer(this.logger, musicDirectory,
                 this.config.ffmpegPath, this.config.ffprobePath, this.config.sliceQuality);
 
-            // Разбор трека для ритм-режима: длина, темп и удары по частотным полосам.
-            // Ему нужен только ffmpeg, тот же, что и нарезке.
             TrackAnalyzer analyzer = new TrackAnalyzer(this.logger, musicDirectory,
                 this.config.ffmpegPath);
 
@@ -131,12 +138,7 @@ public final class ParkourBeatPackRelay {
             this.slicerBridge.register();
             this.server.getEventManager().register(this, this.slicerBridge);
 
-            // Проверка тяжёлая только на первый взгляд: это два вызова -version.
-            // Зато администратор узнает о проблеме сразу при старте, а не когда
-            // строитель нажмёт "нарезать" и получит невнятную ошибку.
             this.server.getScheduler().buildTask(this, () -> {
-                // ogg режется встроенным делителем, ffmpeg нужен только для mp3 и прочей
-                // экзотики. Его отсутствие — не ошибка, а просто отсутствие бонуса.
                 if (slicer.isFfmpegAvailable()) {
                     this.logger.info("Track slicer ready: built-in ogg splitter + ffmpeg for other formats");
                 } else {
@@ -208,18 +210,48 @@ public final class ParkourBeatPackRelay {
 
     @Subscribe
     public void onServerConnected(ServerPostConnectEvent event) {
-        String status = this.lastStatus.get(event.getPlayer().getUniqueId());
-        if (status == null || !this.config.relayToBackend) return;
-        this.server.getScheduler()
-            .buildTask(this, () -> this.send(event.getPlayer(), status, 0))
-            .delay(500, TimeUnit.MILLISECONDS)
-            .schedule();
+        Player player = event.getPlayer();
+        UUID uuid = player.getUniqueId();
+
+        // 1. Форвардинг статуса на бэкенд
+        String status = this.lastStatus.get(uuid);
+        if (status != null && this.config.relayToBackend) {
+            this.server.getScheduler()
+                .buildTask(this, () -> this.send(player, status, 0))
+                .delay(500, TimeUnit.MILLISECONDS)
+                .schedule();
+        }
+
+        // 2. Отправка кор-ресурспака при входе на игровой сервер (а не в Limbo)
+        if (!this.corePackSent.contains(uuid)) {
+            String serverName = player.getCurrentServer()
+                .map(conn -> conn.getServerInfo().getName().toLowerCase(Locale.ROOT))
+                .orElse("");
+
+            // Пропускаем limbo/auth, ждем подключения к настоящему игровому серверу
+            if (serverName.contains("limbo") || serverName.contains("auth")) {
+                return;
+            }
+
+            this.corePackSent.add(uuid);
+            this.server.getScheduler()
+                .buildTask(this, () -> {
+                    if (!player.isActive()) return;
+                    if (this.amusicInit != null) {
+                        this.amusicInit.sendCorePack(player);
+                    }
+                })
+                .delay(750, TimeUnit.MILLISECONDS)
+                .schedule();
+        }
     }
 
     @Subscribe
     public void onDisconnect(DisconnectEvent event) {
         UUID uuid = event.getPlayer().getUniqueId();
+        LayeredPackSender.forget(uuid);
         this.lastStatus.remove(uuid);
+        this.corePackSent.remove(uuid);
         this.watchdog.forget(uuid);
     }
 
@@ -267,27 +299,75 @@ public final class ParkourBeatPackRelay {
         CommandManager manager = this.server.getCommandManager();
         CommandMeta meta = manager.metaBuilder("packrelay").plugin(this).build();
 
-        manager.register(meta, (SimpleCommand) invocation -> {
-            if (!invocation.source().hasPermission("parkourbeat.packrelay")) {
-                invocation.source().sendMessage(Component.text("Нет прав", NamedTextColor.RED));
-                return;
-            }
-
-            String[] args = invocation.arguments();
-
-            invocation.source().sendMessage(Component.text("ParkourBeatPackRelay", NamedTextColor.GOLD));
-
-            if (args.length >= 2 && args[0].equalsIgnoreCase("player")) {
-                Optional<Player> target = this.server.getPlayer(args[1]);
-                if (target.isEmpty()) {
-                    invocation.source().sendMessage(Component.text("Игрок не найден", NamedTextColor.RED));
+        manager.register(meta, new SimpleCommand() {
+            @Override
+            public void execute(Invocation invocation) {
+                if (!invocation.source().hasPermission("parkourbeat.packrelay")) {
+                    invocation.source().sendMessage(Component.text("Нет прав", NamedTextColor.RED));
                     return;
                 }
-                UUID uuid = target.get().getUniqueId();
-                invocation.source().sendMessage(Component.text(
-                    "Последний статус: " + this.lastStatus.getOrDefault(uuid, "нет"), NamedTextColor.GRAY));
-                invocation.source().sendMessage(Component.text(
-                    "Ожидание: " + this.watchdog.describe(uuid), NamedTextColor.GRAY));
+
+                String[] args = invocation.arguments();
+
+                if (args.length >= 1 && (args[0].equalsIgnoreCase("reload") || args[0].equalsIgnoreCase("reloadpack"))) {
+                    if (ParkourBeatPackRelay.this.amusicInit == null) {
+                        invocation.source().sendMessage(Component.text("AMusic не инициализирован.", NamedTextColor.RED));
+                        return;
+                    }
+                    invocation.source().sendMessage(Component.text("Перезагрузка resourcepack.zip и отправка игрокам онлайн...", NamedTextColor.YELLOW));
+                    ParkourBeatPackRelay.this.server.getScheduler().buildTask(ParkourBeatPackRelay.this, () -> {
+                        try {
+                            int count = ParkourBeatPackRelay.this.amusicInit.reloadMergePack(true);
+                            int onlineCount = ParkourBeatPackRelay.this.server.getPlayerCount();
+                            invocation.source().sendMessage(Component.text(
+                                "Базовый ресурспак перезагружен! Перепаковано треков: " + count
+                                    + ", отправлено игрокам онлайн: " + onlineCount, NamedTextColor.GREEN));
+                        } catch (Throwable t) {
+                            ParkourBeatPackRelay.this.logger.error("Ошибка при перезагрузке resourcepack.zip", t);
+                            invocation.source().sendMessage(Component.text(
+                                "Ошибка при перезагрузке: " + t.getMessage(), NamedTextColor.RED));
+                        }
+                    }).schedule();
+                    return;
+                }
+
+                if (args.length >= 2 && args[0].equalsIgnoreCase("player")) {
+                    Optional<Player> target = ParkourBeatPackRelay.this.server.getPlayer(args[1]);
+                    if (target.isEmpty()) {
+                        invocation.source().sendMessage(Component.text("Игрок не найден", NamedTextColor.RED));
+                        return;
+                    }
+                    UUID uuid = target.get().getUniqueId();
+                    invocation.source().sendMessage(Component.text(
+                        "Последний статус: " + ParkourBeatPackRelay.this.lastStatus.getOrDefault(uuid, "нет"), NamedTextColor.GRAY));
+                    invocation.source().sendMessage(Component.text(
+                        "Ожидание: " + ParkourBeatPackRelay.this.watchdog.describe(uuid), NamedTextColor.GRAY));
+                    return;
+                }
+
+                invocation.source().sendMessage(Component.text("ParkourBeatPackRelay", NamedTextColor.GOLD));
+                invocation.source().sendMessage(Component.text("/packrelay reload - перезагрузить базовый resourcepack.zip и обновить у игроков онлайн", NamedTextColor.GRAY));
+                invocation.source().sendMessage(Component.text("/packrelay player <ник> - проверить статус ресурспака игрока", NamedTextColor.GRAY));
+            }
+
+            @Override
+            public List<String> suggest(Invocation invocation) {
+                if (!invocation.source().hasPermission("parkourbeat.packrelay")) {
+                    return List.of();
+                }
+                String[] args = invocation.arguments();
+                if (args.length <= 1) {
+                    List<String> sub = List.of("reload", "player");
+                    if (args.length == 0 || args[0].isEmpty()) return sub;
+                    return sub.stream().filter(s -> s.startsWith(args[0].toLowerCase())).toList();
+                }
+                if (args.length == 2 && args[0].equalsIgnoreCase("player")) {
+                    return ParkourBeatPackRelay.this.server.getAllPlayers().stream()
+                        .map(Player::getUsername)
+                        .filter(name -> name.toLowerCase().startsWith(args[1].toLowerCase()))
+                        .toList();
+                }
+                return List.of();
             }
         });
     }

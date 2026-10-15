@@ -118,7 +118,11 @@ public class LevelsManager implements PluginManager {
 
         try {
             this.dropBlocksOutsideLevel(level);
-            level.getWorld().save();
+            // Только чанки и без записи в главном потоке (см. utils/FastSave): полный
+            // world.save() на медленном диске вешал сервер на 10-15 секунд.
+            if (!ru.sortix.parkourbeat.utils.FastSave.saveChunks(level.getWorld())) {
+                level.getWorld().save();
+            }
         } catch (Exception e) {
             this.changedWorlds.add(worldToSave);
             this.plugin.getLogger().log(java.util.logging.Level.SEVERE,
@@ -1045,6 +1049,8 @@ public class LevelsManager implements PluginManager {
                 false
             );
         }
+        // Настройки уровней пишутся в фоне - дождаться записи перед выключением.
+        ru.sortix.parkourbeat.utils.FastSave.flush();
     }
 
     public void addParticleController(@NonNull ParticleController controller) {

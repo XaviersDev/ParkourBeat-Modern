@@ -25,7 +25,7 @@ public class SelectBossBarColorMenu extends ParkourBeatInventory implements Edit
                                   @NonNull BiConsumer<Player, LevelBossBarColor> onSelect,
                                   @NonNull Consumer<Player> onBack
     ) {
-        super(plugin, 3, lang, LangOptions.inventory_editorbossbar_title.getComponent(lang));
+        super(plugin, 3, lang, ru.sortix.parkourbeat.ui.Glyphs.menuTitle((char) (0xE96F + ru.sortix.parkourbeat.ui.Glyphs.localeSet(lang)), ru.sortix.parkourbeat.ui.Icons.Icon.PENCIL.component().append(net.kyori.adventure.text.Component.text(" ")).append(LangOptions.inventory_editorbossbar_title.getComponent(lang))));
         this.onSelect = onSelect;
         this.onBack = onBack;
 

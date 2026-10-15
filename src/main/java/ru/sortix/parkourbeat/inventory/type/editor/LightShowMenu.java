@@ -34,7 +34,7 @@ public class LightShowMenu extends ParkourBeatInventory implements EditLevelMenu
     private final @NonNull Level level;
 
     public LightShowMenu(@NonNull ParkourBeat plugin, String lang, @NonNull EditActivity activity) {
-        super(plugin, 6, lang, LangOptions.inventory_editorlightshow_title.getComponent(lang));
+        super(plugin, 6, lang, ru.sortix.parkourbeat.ui.Glyphs.menuTitle((char) (0xE94E + ru.sortix.parkourbeat.ui.Glyphs.localeSet(lang)), ru.sortix.parkourbeat.ui.Icons.Icon.PENCIL.component().append(net.kyori.adventure.text.Component.text(" ")).append(LangOptions.inventory_editorlightshow_title.getComponent(lang))));
         this.activity = activity;
         this.level = activity.getLevel();
         this.updateItems();

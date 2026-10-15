@@ -42,6 +42,8 @@ public final class PPCalculator {
         switch (difficulty) {
             case EASY:
                 return 40.0D;
+            case NORMAL:
+                return 70.0D;
             case HARD:
                 return 100.0D;
             case EXPERT:

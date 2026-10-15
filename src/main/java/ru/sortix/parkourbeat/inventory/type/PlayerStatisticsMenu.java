@@ -32,35 +32,34 @@ public class PlayerStatisticsMenu extends ParkourBeatInventory {
 
     public PlayerStatisticsMenu(@NonNull ParkourBeat plugin, String lang,
                                 @NonNull Player viewer, @NonNull UUID targetId, @NonNull String targetName) {
-        super(plugin, 3, lang, Lang.item(lang, "inventory.playerstats.title",
-            "%player%", StatsFormat.safeName(targetName)));
+        super(plugin, 6, lang, ru.sortix.parkourbeat.ui.Glyphs.menuTitle(ru.sortix.parkourbeat.ui.Glyphs.menuProfile(lang), ru.sortix.parkourbeat.ui.Icons.Icon.USER.component().append(net.kyori.adventure.text.Component.text(" ")).append(Lang.item(lang, "inventory.playerstats.title",
+            "%player%", StatsFormat.safeName(targetName)))));
         this.targetId = targetId;
         this.targetName = targetName;
         this.render(viewer);
     }
 
     private void render(@NonNull Player viewer) {
-        this.drawBorders();
 
         StatisticsManager statistics = this.plugin.get(StatisticsManager.class);
         PlayerProfile profile = statistics.getProfile(this.targetId, this.targetName);
         ProfileSummary summary = statistics.summarize(profile);
         int position = statistics.getDisplayRank(profile.getPlayerId());
 
-        this.setItem(4, this.buildSummaryHead(summary, position), null);
+        this.setItem(13, this.buildSummaryHead(summary, position), null);
 
-        this.setItem(11, ItemUtils.modifyMeta(Heads.getHeadByHash(CREEPER_HEAD), meta -> {
+        this.setItem(31, ItemUtils.modifyMeta(ru.sortix.parkourbeat.ui.Icons.Button.BOOK.item(ru.sortix.parkourbeat.ui.Icons.ButtonState.NORMAL), meta -> {
             meta.displayName(Lang.item(this.lang, "inventory.playerstats.levels.name"));
             meta.lore(Lang.lore(this.lang, "inventory.playerstats.levels.lore",
                 "%count%", String.valueOf(profile.getAllRecords().size())));
         }), event -> new PlayerLevelsMenu(this.plugin, this.lang, viewer, this.targetId, this.targetName).open(viewer));
 
-        this.setItem(15, ItemUtils.modifyMeta(Heads.getHeadByHash(ZOMBIE_HEAD), meta -> {
+        this.setItem(32, ItemUtils.modifyMeta(ru.sortix.parkourbeat.ui.Icons.Button.SORT_NEW.item(ru.sortix.parkourbeat.ui.Icons.ButtonState.NORMAL), meta -> {
             meta.displayName(Lang.item(this.lang, "inventory.playerstats.history.name"));
             meta.lore(Lang.lore(this.lang, "inventory.playerstats.history.lore"));
         }), event -> new PlayerHistoryMenu(this.plugin, this.lang, viewer, this.targetId, this.targetName).open(viewer));
 
-        this.setItem(22, ItemUtils.modifyMeta(UIHeads.ARROW_LEFT.clone(), meta ->
+        this.setItem(45, ItemUtils.modifyMeta(ru.sortix.parkourbeat.ui.Icons.Button.ARROW_LEFT.item(ru.sortix.parkourbeat.ui.Icons.ButtonState.NORMAL), meta ->
                 meta.displayName(Lang.item(this.lang, "inventory.common.back"))),
             event -> new GlobalStatisticsMenu(this.plugin, this.lang, viewer).open(viewer));
     }

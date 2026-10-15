@@ -13,6 +13,7 @@ version = "1.0-SNAPSHOT"
 
 repositories {
     mavenCentral()
+    maven("https://repo.viaversion.com")
     maven("https://repo.papermc.io/repository/maven-public")
     maven("https://oss.sonatype.org/content/groups/public")
     maven("https://repo.infernalsuite.com/repository/maven-snapshots")
@@ -25,6 +26,8 @@ repositories {
 dependencies {
     compileOnly("com.destroystokyo.paper:paper-api:1.16.5-R0.1-SNAPSHOT")
     compileOnly("com.grinderwolf:slimeworldmanager-api:2.2.1")
+    compileOnly("com.viaversion:viaversion-api:5.11.0")
+    compileOnly("com.viaversion:viaversion-common:5.11.0")
     compileOnly(files("run/plugins/ProtocolLib_5.3.0.jar"))
     compileOnly("com.github.XaviersDev:Lightshow-Plugin:2.5")
     shadow("com.github.FatSaw.AMusic:amusic_bukkit:v0.19_release")

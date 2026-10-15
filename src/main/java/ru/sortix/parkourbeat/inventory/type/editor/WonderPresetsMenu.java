@@ -56,7 +56,7 @@ public class WonderPresetsMenu extends ParkourBeatInventory implements EditLevel
                              @Nullable WonderCategory startCategory,
                              boolean autoTime
     ) {
-        super(plugin, 6, lang, PbText.of(Lang.raw(lang, "auto.wonder_presets_menu.wonder_presets_menu.1")));
+        super(plugin, 6, lang, ru.sortix.parkourbeat.ui.Glyphs.menuTitle((char) (0xE9A8 + ru.sortix.parkourbeat.ui.Glyphs.localeSet(lang)), ru.sortix.parkourbeat.ui.Icons.Icon.PENCIL.component().append(net.kyori.adventure.text.Component.text(" ")).append(PbText.of(Lang.raw(lang, "auto.wonder_presets_menu.wonder_presets_menu.1")))));
         this.activity = activity;
         this.level = activity.getLevel();
         this.target = target;

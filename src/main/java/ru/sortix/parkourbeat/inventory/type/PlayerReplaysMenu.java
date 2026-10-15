@@ -27,11 +27,11 @@ import ru.sortix.parkourbeat.utils.text.PbText;
 
 public class PlayerReplaysMenu extends ParkourBeatInventory {
     private static final int[] SLOTS = {
+        1, 2, 3, 4, 5, 6, 7,
         10, 11, 12, 13, 14, 15, 16,
-        19, 20, 21, 22, 23, 24, 25,
-        28, 29, 30, 31, 32, 33, 34
+        19, 20, 21, 22, 23, 24, 25
     };
-    private static final int LOADING_SLOT = 22;
+    private static final int LOADING_SLOT = 13;
 
     private final @NonNull UUID targetId;
     private final @NonNull String targetName;
@@ -39,8 +39,8 @@ public class PlayerReplaysMenu extends ParkourBeatInventory {
 
     public PlayerReplaysMenu(@NonNull ParkourBeat plugin, String lang,
                              @NonNull Player viewer, @NonNull UUID targetId, @NonNull String targetName) {
-        super(plugin, 5, lang, Lang.item(lang, "inventory.playerreplays.title",
-            "%player%", StatsFormat.safeName(targetName)));
+        super(plugin, 6, lang, ru.sortix.parkourbeat.ui.Glyphs.menuTitle(ru.sortix.parkourbeat.ui.Glyphs.menuReplays(lang), ru.sortix.parkourbeat.ui.Icons.Icon.REC.component().append(net.kyori.adventure.text.Component.text(" ")).append(Lang.item(lang, "inventory.playerreplays.title",
+            "%player%", StatsFormat.safeName(targetName)))));
         this.targetId = targetId;
         this.targetName = targetName;
         this.viewer = viewer;
@@ -48,11 +48,10 @@ public class PlayerReplaysMenu extends ParkourBeatInventory {
     }
 
     private void render(@NonNull Player viewer) {
-        this.fillBorder();
 
         StatisticsManager statistics = this.plugin.get(StatisticsManager.class);
 
-        this.setItem(5, 5, ItemUtils.modifyMeta(UIHeads.ARROW_LEFT.clone(), meta ->
+        this.setItem(6, 1, ItemUtils.modifyMeta(ru.sortix.parkourbeat.ui.Icons.Button.ARROW_LEFT.item(ru.sortix.parkourbeat.ui.Icons.ButtonState.NORMAL), meta ->
                 meta.displayName(Lang.item(this.lang, "inventory.common.back"))),
             event -> new PlayerHistoryMenu(this.plugin, this.lang, viewer, this.targetId, this.targetName).open(viewer));
 

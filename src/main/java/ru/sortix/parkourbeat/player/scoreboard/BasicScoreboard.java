@@ -27,6 +27,12 @@ public class BasicScoreboard {
     final List<BoardLine> lines = new ArrayList<>();
     private int lastEntryNumber = 0;
 
+    /** Табло, у которых заголовок - логотип: ему раз в 2 тика меняется кадр блика. */
+    private static final java.util.Set<BasicScoreboard> ANIMATED =
+        java.util.concurrent.ConcurrentHashMap.newKeySet();
+    private final boolean animatedLogo;
+    private volatile char lastLogo = 0;
+
     public BasicScoreboard(@NonNull Plugin plugin,
                            @NonNull Player viewer,
                            @NonNull Scoreboard scoreboard,
@@ -46,6 +52,9 @@ public class BasicScoreboard {
             RenderType.INTEGER
         );
         this.objective.setDisplaySlot(slot);
+        this.animatedLogo = title instanceof net.kyori.adventure.text.TextComponent
+            && String.valueOf(ru.sortix.parkourbeat.ui.Glyphs.LOGO_SCORE)
+            .equals(((net.kyori.adventure.text.TextComponent) title).content());
         org.bukkit.scoreboard.Scoreboard mainBoard = Bukkit.getScoreboardManager().getMainScoreboard();
         for (org.bukkit.scoreboard.Team mainTeam : mainBoard.getTeams()) {
             if (mainTeam.getName().startsWith("pb_")) {
@@ -69,6 +78,7 @@ public class BasicScoreboard {
     @NonNull
     public BasicScoreboard setTitle(@Nullable Component title) {
         this.objective.displayName(title);
+        this.hideNumbers(title);
         return this;
     }
 
@@ -122,13 +132,39 @@ public class BasicScoreboard {
     @NonNull
     public BasicScoreboard show() {
         this.setViewerScoreboard(this.scoreboard);
+        if (this.animatedLogo) ANIMATED.add(this);
         return this;
     }
 
     @NonNull
     public BasicScoreboard hide() {
+        ANIMATED.remove(this);
         this.setViewerScoreboard(null);
         return this;
+    }
+
+    /** Ставит кадр логотипа всем живым табло. Пакет уходит, только если кадр сменился. */
+    public static void animateLogos(char frame) {
+        for (BasicScoreboard board : ANIMATED) {
+            Player owner = board.server.getPlayer(board.viewerId);
+            char shown = owner != null && !ru.sortix.parkourbeat.ui.HudSettings.logo(owner)
+                ? ru.sortix.parkourbeat.ui.Glyphs.LOGO_SCORE : frame;
+            if (board.lastLogo == shown) continue;
+            try {
+                Component logo = Component.text(String.valueOf(shown));
+                board.objective.displayName(logo);
+                board.lastLogo = shown;
+                board.hideNumbers(logo);
+            } catch (IllegalStateException e) {
+                ANIMATED.remove(board);
+            }
+        }
+    }
+
+    /** Красные цифры справа - прочь (клиенты 1.20.3+, см. ui/ScoreNumbers). */
+    private void hideNumbers(@NonNull Component title) {
+        Player player = this.server.getPlayer(this.viewerId);
+        if (player != null) ru.sortix.parkourbeat.ui.ScoreNumbers.hide(player, this.objective.getName(), title);
     }
 
     private void setViewerScoreboard(@Nullable Scoreboard scoreboard) {
@@ -136,5 +172,6 @@ public class BasicScoreboard {
         if (player != null) {
             player.setScoreboard(scoreboard == null ? EMPTY_BOARD : scoreboard);
         }
+            if (scoreboard != null) this.hideNumbers(this.objective.displayName());
     }
 }
